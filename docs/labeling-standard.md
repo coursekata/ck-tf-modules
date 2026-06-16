@@ -103,6 +103,3 @@ order can't rename a state bucket). Modules also pin the **`Name` tag to the ful
   auto-jump to 0.6; Dependabot proposes patch bumps (an `ignore` rule blocks minor/major).
   `null-label` is pre-1.0 too,
   so this is no riskier than what it replaces.
-- **Private-repo access:** consuming this repo's modules from CI (and the dflook delivery
-  actions) needs a token with read access to `coursekata/ck-tf-modules` available to
-  `tofu init`.

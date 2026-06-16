@@ -57,11 +57,6 @@ module "state_backend" {
 
 `tofu init` fetches both the module (at that tag) and the `cloudposse/context` provider.
 
-> **Private-repo access:** this repo is private, so any CI runner consuming it (and the
-> dflook delivery actions) needs read access to it. Use a GitHub token with `repo:read`
-> scoped to `coursekata/ck-tf-modules`, exposed to `tofu init` (e.g. a git `insteadOf`
-> credential or `GITHUB_TOKEN` with the right permissions). See `docs/labeling-standard.md`.
-
 ## Versioning
 
 SemVer via git tags (`vMAJOR.MINOR.PATCH`). A breaking change to a module's interface bumps
