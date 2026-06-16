@@ -23,7 +23,7 @@ jobs:
   quality:
     uses: ./.github/workflows/tf-quality.yml
     with:
-      tofu_version: "1.11.6"
+      tofu_version: "1.12.2"
 
   ci-passed:
     if: always()

@@ -14,13 +14,13 @@ on:
       tofu_version:
         description: "OpenTofu version to install (match the caller's .opentofu-version)."
         type: string
-        default: "1.11.6" # bump manually (not a Dependabot-tracked ecosystem)
+        default: "1.12.2" # bump manually (not a Dependabot-tracked ecosystem)
 
 permissions:
   contents: read
 
 jobs:
-  quality-bar:
+  tofu:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
@@ -43,8 +43,8 @@ jobs:
         run: |
           # No official install-only action exists (the gh-action is a Docker run-action that
           # fights the prek model), so install the pinned binary with a checksum gate.
-          ver=v0.19.0 # bump manually
-          sha=dd741a0ece81059a478684b414d95d72b8b74fa58f50ac4036b4e8b56130d64b
+          ver=v0.24.0 # bump manually — must match contributors' local terraform-docs (table format differs by version)
+          sha=9005daf969de0b50134493a2c00078b49f5f5b39d021cda7c89bf4d4f3d776d3
           curl -fsSLo /tmp/tfdocs.tgz \
             "https://github.com/terraform-docs/terraform-docs/releases/download/${ver}/terraform-docs-${ver}-linux-amd64.tar.gz"
           echo "${sha}  /tmp/tfdocs.tgz" | sha256sum -c -
