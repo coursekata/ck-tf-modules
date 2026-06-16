@@ -1,0 +1,22 @@
+# OpenTofu / Terraform
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+.terraform.lock.hcl
+crash.log
+crash.*.log
+
+# Operator-local credentials and overrides
+.env
+!.env.example
+
+# tflint cache
+.tflint.d/
+
+# OS / editor
+.DS_Store
+Thumbs.db
+*.swp
+.idea/
+.vscode/

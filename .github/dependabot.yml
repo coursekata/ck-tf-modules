@@ -1,0 +1,34 @@
+# Dependabot keeps action SHAs, the tofu provider constraints, and pre-commit hook revs
+# current. The 3 tool-version strings in tf-quality.yml (tofu/trivy/terraform-docs) aren't an
+# ecosystem Dependabot can see, so they're bumped manually — a small, rare chore.
+version: 2
+updates:
+  - package-ecosystem: github-actions
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      actions:
+        patterns: ["*"]
+
+  - package-ecosystem: terraform
+    directories:
+      - "/modules/state-backend"
+    schedule:
+      interval: weekly
+    groups:
+      tofu:
+        patterns: ["*"]
+    ignore:
+      # context is pinned at ~> 0.5.0 (pre-1.0): take patch bumps within 0.5, never auto-jump
+      # to 0.6+. A human bumps the minor deliberately.
+      - dependency-name: "cloudposse/context"
+        update-types: ["version-update:semver-minor", "version-update:semver-major"]
+
+  - package-ecosystem: pre-commit
+    directory: "/"
+    schedule:
+      interval: weekly
+    groups:
+      hooks:
+        patterns: ["*"]
