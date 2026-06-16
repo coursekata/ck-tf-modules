@@ -1,0 +1,39 @@
+name: ci
+
+# Thin caller of the org's reusable quality gate (./.github/workflows/tf-quality.yml, hosted
+# in this repo so every consuming repo runs an identical bar — see it for what runs). Other
+# repos call it remotely (uses: coursekata/ck-tf-modules/.github/workflows/tf-quality.yml@<tag>);
+# this repo references it locally. ci-passed is the single stable status check a branch
+# ruleset points at.
+
+on:
+  pull_request:
+    branches: [main]
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  quality:
+    uses: ./.github/workflows/tf-quality.yml
+    with:
+      tofu_version: "1.11.6"
+
+  ci-passed:
+    if: always()
+    needs: [quality]
+    runs-on: ubuntu-latest
+    steps:
+      - name: Assert all required CI jobs succeeded
+        run: |
+          if [ "${{ needs.quality.result }}" != "success" ]; then
+            echo "quality did not succeed: ${{ needs.quality.result }}"
+            exit 1
+          fi
+          echo "All required CI jobs succeeded."

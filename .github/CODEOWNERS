@@ -1,0 +1,4 @@
+# Shared modules consumed across every IaC repo — a change here ripples into anything that
+# pins a module, so all paths route to @adamblake for review. Add module-specific owners as
+# the library and the team grow.
+*  @adamblake

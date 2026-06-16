@@ -1,0 +1,57 @@
+name: tf-quality
+
+# Reusable code-quality gate for the org's OpenTofu repos. A caller adds a small job that
+# `uses:` this workflow; it runs the SAME pre-commit hooks developers run locally (via prek),
+# so remote CI and local pre-commit stay in parity from a single definition. Bump a tool
+# version here once and every consuming repo inherits it.
+#
+# Credential-free: tofu test drives an offline provider and validate runs with -backend=false.
+# Actions are pinned to full commit SHAs; Dependabot in this repo keeps them current.
+
+on:
+  workflow_call:
+    inputs:
+      tofu_version:
+        description: "OpenTofu version to install (match the caller's .opentofu-version)."
+        type: string
+        default: "1.11.6" # bump manually (not a Dependabot-tracked ecosystem)
+
+permissions:
+  contents: read
+
+jobs:
+  quality-bar:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@df4cb1c069e1874edd31b4311f1884172cec0e10 # v6.0.3
+
+      - name: Install OpenTofu
+        uses: opentofu/setup-opentofu@847eaa4afeb791b06daa46e8eafa8b1b68d7cfb4 # v2.0.1
+        with:
+          tofu_version: ${{ inputs.tofu_version }}
+          tofu_wrapper: false
+
+      - name: Install tflint
+        uses: terraform-linters/setup-tflint@b480b8fcdaa6f2c577f8e4fa799e89e756bb7c93 # v6.2.2
+
+      - name: Install trivy
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: v0.71.1 # bump manually
+
+      - name: Install terraform-docs
+        run: |
+          # No official install-only action exists (the gh-action is a Docker run-action that
+          # fights the prek model), so install the pinned binary with a checksum gate.
+          ver=v0.19.0 # bump manually
+          sha=dd741a0ece81059a478684b414d95d72b8b74fa58f50ac4036b4e8b56130d64b
+          curl -fsSLo /tmp/tfdocs.tgz \
+            "https://github.com/terraform-docs/terraform-docs/releases/download/${ver}/terraform-docs-${ver}-linux-amd64.tar.gz"
+          echo "${sha}  /tmp/tfdocs.tgz" | sha256sum -c -
+          tar -xzf /tmp/tfdocs.tgz -C /tmp terraform-docs
+          sudo install /tmp/terraform-docs /usr/local/bin/terraform-docs
+
+      - uses: astral-sh/setup-uv@fac544c07dec837d0ccb6301d7b5580bf5edae39 # v8.2.0
+
+      - name: Run the quality bar
+        run: uvx prek run --all-files --show-diff-on-failure
