@@ -135,3 +135,16 @@ run "permissionless_apply_role_is_rejected" {
     aws_iam_role.apply,
   ]
 }
+
+run "permissionless_plan_role_is_rejected" {
+  command = plan
+
+  variables {
+    plan_policy_arns   = []
+    plan_inline_policy = null
+  }
+
+  expect_failures = [
+    aws_iam_role.plan,
+  ]
+}

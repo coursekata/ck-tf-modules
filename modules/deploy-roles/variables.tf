@@ -1,3 +1,7 @@
+# Namespace/tenant and tags come from the cloudposse/context PROVIDER (configured by the
+# consuming root, which must declare the `attributes` property so the plan role renders
+# <...>-plan). Only the inputs below are specific to this module.
+
 variable "expected_account_id" {
   description = "AWS account these deploy roles must be created in (the spoke account). A precondition fails the plan if the provider resolved elsewhere, so a wrong-profile apply can't mint deploy roles in the wrong account."
   type        = string
@@ -57,4 +61,9 @@ variable "name" {
   description = "The context `name` slot for the roles. Renders as <namespace>-<tenant>-<name> (apply) and <namespace>-<tenant>-<name>-plan (plan), e.g. ck-org-deploy / ck-org-deploy-plan."
   type        = string
   default     = "deploy"
+
+  validation {
+    condition     = can(regex("^[a-z0-9-]+$", var.name))
+    error_message = "name must be lowercase letters, digits, and hyphens only (the context provider does not auto-lowercase the rendered role name)."
+  }
 }

@@ -40,7 +40,9 @@ data "context_tags" "plan" {
 }
 
 # --- trust: each deploy role trusts EXACTLY its hub CI role (a regular IAM principal that
-# itself entered via OIDC). sts:TagSession because configure-aws-credentials tags sessions. ---
+# itself entered via OIDC). sts:TagSession because configure-aws-credentials tags sessions.
+# The hub CI role need not exist when these roles are created (IAM validates the principal ARN
+# syntactically, not existentially) — but the hub apply must land before an assume succeeds. ---
 data "aws_iam_policy_document" "apply_trust" {
   statement {
     effect  = "Allow"
