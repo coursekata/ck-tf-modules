@@ -14,8 +14,9 @@ role ARN (no wildcard, no cross-trust between the plan and apply paths) for `sts
 `sts:TagSession`. The spoke supplies its own permissions (`*_policy_arns` / `*_inline_policy`).
 Names + tags come from the **`cloudposse/context` provider** the consuming root configures —
 which must declare the `attributes` property so the plan role can render `<...>-plan`. The
-roles are pinned to `expected_account_id` via a precondition, so a wrong-profile apply can't
-mint deploy roles in the wrong account.
+wrong-account guard is the **root's** job — the root calls the shared
+[`account-guard`](../account-guard) module once per spoke account — so this module takes no
+`expected_account_id`.
 
 ## Usage (a spoke's `bootstrap/deploy-roles` root)
 
@@ -34,9 +35,7 @@ provider "context" {
 }
 
 module "deploy_roles" {
-  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/deploy-roles?ref=v0.2.0"
-
-  expected_account_id = "232672477651"
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/deploy-roles?ref=v0.3.0"
 
   # The hub CI roles permitted to assume each spoke role (from ck-tooling/environments/hub):
   hub_apply_role_arn = "arn:aws:iam::883385860947:role/ck-tooling-ci-foundation-apply"
@@ -81,7 +80,6 @@ No modules.
 | [aws_iam_role_policy.plan_inline](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
 | [aws_iam_role_policy_attachment.apply_managed](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy_attachment) | resource |
 | [aws_iam_role_policy_attachment.plan_managed](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy_attachment) | resource |
-| [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
 | [aws_iam_policy_document.apply_trust](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.plan_trust](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [context_label.apply](https://registry.terraform.io/providers/cloudposse/context/latest/docs/data-sources/label) | data source |
@@ -93,7 +91,6 @@ No modules.
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
-| <a name="input_expected_account_id"></a> [expected\_account\_id](#input\_expected\_account\_id) | AWS account these deploy roles must be created in (the spoke account). A precondition fails the plan if the provider resolved elsewhere, so a wrong-profile apply can't mint deploy roles in the wrong account. | `string` | n/a | yes |
 | <a name="input_hub_apply_role_arn"></a> [hub\_apply\_role\_arn](#input\_hub\_apply\_role\_arn) | ARN of the hub CI APPLY role (in the tooling account) permitted to sts:AssumeRole the apply (RW) deploy role. This is the gated write path: the hub apply role is itself assumable only from the spoke's protected GitHub Environment. | `string` | n/a | yes |
 | <a name="input_apply_inline_policy"></a> [apply\_inline\_policy](#input\_apply\_inline\_policy) | Optional inline IAM policy JSON for the apply (RW) deploy role (e.g. from a data.aws\_iam\_policy\_document). | `string` | `null` | no |
 | <a name="input_apply_policy_arns"></a> [apply\_policy\_arns](#input\_apply\_policy\_arns) | Managed IAM policy ARNs attached to the apply (RW) deploy role — the spoke's deploy permissions. Use these or apply\_inline\_policy (at least one is required). | `list(string)` | `[]` | no |

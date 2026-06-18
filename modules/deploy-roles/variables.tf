@@ -2,16 +2,6 @@
 # consuming root, which must declare the `attributes` property so the plan role renders
 # <...>-plan). Only the inputs below are specific to this module.
 
-variable "expected_account_id" {
-  description = "AWS account these deploy roles must be created in (the spoke account). A precondition fails the plan if the provider resolved elsewhere, so a wrong-profile apply can't mint deploy roles in the wrong account."
-  type        = string
-
-  validation {
-    condition     = can(regex("^[0-9]{12}$", var.expected_account_id))
-    error_message = "expected_account_id must be a 12-digit AWS account ID."
-  }
-}
-
 variable "hub_apply_role_arn" {
   description = "ARN of the hub CI APPLY role (in the tooling account) permitted to sts:AssumeRole the apply (RW) deploy role. This is the gated write path: the hub apply role is itself assumable only from the spoke's protected GitHub Environment."
   type        = string

@@ -1,8 +1,8 @@
 # Proves the grants seam: each grant becomes one Allow statement with the bucket's OWN ARN
 # injected into its resources. The real aws provider runs OFFLINE (skip_*) so
 # aws_iam_policy_document actually renders — it is mocked (hence unassertable) under
-# mock_provider. aws_s3_bucket.this.arn is "known after apply" at plan, so we override it to a
-# known value, which makes the rendered policy JSON assertable.
+# mock_provider. The bucket ARN is built from the rendered name (local.bucket_arn), known at
+# plan, so the rendered policy JSON is assertable without overriding any resource.
 
 provider "aws" {
   region                      = "us-west-2"
@@ -24,13 +24,6 @@ provider "context" {
     attributes = { validation_regex = "^[a-z0-9-]*$" }
   }
   values = { namespace = "ck", tenant = "org" }
-}
-
-# The account-guard data source would hit real STS under the offline provider; stub it.
-# (No resource override needed: the policy injects local.bucket_arn, which is known at plan.)
-override_data {
-  target = data.aws_caller_identity.current
-  values = { account_id = "123456789012" }
 }
 
 run "grants_inject_the_bucket_arn_into_the_policy" {

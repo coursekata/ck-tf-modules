@@ -128,9 +128,3 @@ variable "grants" {
     error_message = "each grant needs a unique sid."
   }
 }
-
-variable "expected_account_id" {
-  description = "Account the bucket must be created in (precondition guard). null skips the guard."
-  type        = string
-  default     = null
-}

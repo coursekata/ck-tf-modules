@@ -7,8 +7,8 @@ expiry, SSE-KMS.
 
 Name + tags come from the **`cloudposse/context` provider** the consuming root configures; the
 bucket is named from the `name` (+ optional `attributes`) slots →
-`ck-<tenant>-<name>[-<attributes>]`. The bucket is pinned to `expected_account_id` via a
-precondition (null skips the guard).
+`ck-<tenant>-<name>[-<attributes>]`. The wrong-account guard is the **root's** job (the shared
+[`account-guard`](../account-guard) module), so this module takes no `expected_account_id`.
 
 > Not ck-datalake's tier-bucket (ephemeral: always-KMS, versioning off, no Object Lock). Different
 > trust/retention model — do not conflate.
@@ -28,7 +28,7 @@ provider "context" {
 }
 
 module "archive" {
-  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/s3-bucket?ref=v0.2.2"
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/s3-bucket?ref=v0.3.0"
 
   name       = "cloudtrail"
   attributes = "logs" # -> ck-org-cloudtrail-logs
@@ -38,8 +38,7 @@ module "archive" {
   tls_only           = true
 
   # grants are usually produced by a dedicated grant module (decoupled, ARN-free):
-  grants              = module.cloudtrail_delivery_grant.grants
-  expected_account_id = "608311475144"
+  grants = module.cloudtrail_delivery_grant.grants
 }
 ```
 
@@ -78,7 +77,6 @@ No modules.
 | [aws_s3_bucket_public_access_block.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_public_access_block) | resource |
 | [aws_s3_bucket_server_side_encryption_configuration.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_server_side_encryption_configuration) | resource |
 | [aws_s3_bucket_versioning.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_versioning) | resource |
-| [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
 | [aws_iam_policy_document.this](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_partition.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/partition) | data source |
 | [context_label.this](https://registry.terraform.io/providers/cloudposse/context/latest/docs/data-sources/label) | data source |
@@ -90,7 +88,6 @@ No modules.
 | ---- | ----------- | ---- | ------- | :------: |
 | <a name="input_name"></a> [name](#input\_name) | The context `name` slot for the bucket (e.g. "cloudtrail" -> ck-<tenant>-cloudtrail). | `string` | n/a | yes |
 | <a name="input_attributes"></a> [attributes](#input\_attributes) | Optional context `attributes` slot, appended as a trailing qualifier (e.g. "logs" -> ...-cloudtrail-logs). "" renders no suffix. | `string` | `""` | no |
-| <a name="input_expected_account_id"></a> [expected\_account\_id](#input\_expected\_account\_id) | Account the bucket must be created in (precondition guard). null skips the guard. | `string` | `null` | no |
 | <a name="input_grants"></a> [grants](#input\_grants) | Service-delivery grants merged into the bucket's single policy (alongside tls\_only). Each<br/>grant becomes one Allow statement, and the bucket's OWN ARN is injected here — the resource<br/>is the bucket ARN plus each key\_suffix ("" = the bucket itself, "/AWSLogs/<acct>/*" = an<br/>object path). A grant carries NO bucket reference, so a grant-producer module (e.g.<br/>cloudtrail-delivery-grant) composes without depending on this one. | <pre>list(object({<br/>    sid               = string<br/>    principal_service = string                       # e.g. "cloudtrail.amazonaws.com"<br/>    actions           = list(string)                 # e.g. ["s3:PutObject"]<br/>    key_suffixes      = optional(list(string), [""]) # appended to the bucket ARN; "" = bare bucket<br/>    conditions = optional(list(object({<br/>      test     = string<br/>      variable = string<br/>      values   = list(string)<br/>    })), [])<br/>  }))</pre> | `[]` | no |
 | <a name="input_kms_key_arn"></a> [kms\_key\_arn](#input\_kms\_key\_arn) | KMS key ARN for SSE-KMS. null uses SSE-S3 (AES256), the default until a key-management driver exists. | `string` | `null` | no |
 | <a name="input_lifecycle_rule"></a> [lifecycle\_rule](#input\_lifecycle\_rule) | Optional lifecycle knobs on a single all-objects rule. Any null field omits that<br/>action; if the object itself is null (or every field is null) no lifecycle<br/>configuration is created (lets a bucket import to no-diff against one with none). | <pre>object({<br/>    expiration_days                    = optional(number)<br/>    noncurrent_version_expiration_days = optional(number)<br/>    abort_incomplete_multipart_days    = optional(number)<br/>  })</pre> | `null` | no |
