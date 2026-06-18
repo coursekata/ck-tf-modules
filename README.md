@@ -9,6 +9,9 @@ quality bar, not the delivery gate.
 
 | Module | Purpose |
 |--------|---------|
+| [`context-schema`](modules/context-schema) | Outputs-only module emitting the org labeling schema (property order, slots, tag-case) that each root's `cloudposse/context` provider is configured from. |
+| [`deploy-roles`](modules/deploy-roles) | Spoke plan (RO) + apply (RW) IAM roles for the OIDC hub-spoke delivery model — standardized trust, caller-supplied permissions. |
+| [`s3-bucket`](modules/s3-bucket) | Hardened, durable S3 bucket archetype for security/audit buckets, with a generic ARN-free `grants` seam for service-delivery policies. |
 | [`state-backend`](modules/state-backend) | Hardened S3 bucket backing an OpenTofu root's state via the native S3 lockfile (no DynamoDB). |
 
 ## Layout
@@ -27,40 +30,42 @@ Modules configure **no provider** — the consuming root supplies it (and its `d
 ## Consuming a module
 
 Modules derive names/tags from the **`cloudposse/context` provider**, so a consuming root
-configures it **once** (the org policy + that repo's namespace/tenant — see
-[`docs/labeling-standard.md`](docs/labeling-standard.md)), then pins the module `source` to a
-released **git tag** (Dependabot bumps the ref via PRs):
+configures it **once**: the org schema comes from the [`context-schema`](modules/context-schema)
+module (canonical spec: [`docs/labeling-standard.md`](docs/labeling-standard.md)), and the root
+supplies only its namespace/tenant. Module `source`s pin a released **git tag** (Dependabot bumps
+the ref via PRs):
 
 ```hcl
-# providers.tf — the org context (each repo sets its own namespace/tenant)
-provider "context" {
-  property_order  = ["namespace", "tenant", "stage", "name"]
-  tags_value_case = "lower" # lowercase tag values (Title-case keys are the default)
-  properties = {
-    # validation_regex enforces lowercase: the provider doesn't auto-lowercase the id, so this
-    # guards against invalid (uppercase) resource names.
-    namespace = { required = true, min_length = 1, validation_regex = "^[a-z0-9-]+$" }
-    tenant    = { validation_regex = "^[a-z0-9-]*$" }
-    stage     = { validation_regex = "^[a-z0-9-]*$" }
-    name      = { validation_regex = "^[a-z0-9-]*$" }
-  }
-  values = { namespace = "ck", tenant = "tooling" }
+# providers.tf — configure the context provider from the context-schema module.
+module "context_schema" {
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/context-schema?ref=v0.2.1"
 }
 
-# main.tf — slots come from the provider; the module takes only its own inputs
+provider "context" {
+  property_order  = module.context_schema.property_order
+  properties      = module.context_schema.properties
+  tags_value_case = module.context_schema.tags_value_case
+  values          = { namespace = "ck", tenant = "tooling" } # each repo sets its own
+}
+
+# main.tf — slots come from the provider; a module takes only its own inputs
 module "state_backend" {
-  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/state-backend?ref=v0.1.0"
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/state-backend?ref=v0.2.1"
 
   expected_account_id = "123456789012"
 }
 ```
 
-`tofu init` fetches both the module (at that tag) and the `cloudposse/context` provider.
+`tofu init` fetches the modules (at their tags) and the `cloudposse/context` provider.
 
 ## Versioning
 
-SemVer via git tags (`vMAJOR.MINOR.PATCH`). A breaking change to a module's interface bumps
-MAJOR; consumers pin a tag and upgrade deliberately.
+SemVer via git tags (`vMAJOR.MINOR.PATCH`); consumers pin a tag and upgrade deliberately.
+**While pre-1.0 (`0.y.z`)** the MINOR is the breaking/compatibility signal and the PATCH covers
+additive changes *and* features — adding a module is a **patch** bump (e.g. `v0.2.1` → `v0.2.2`).
+At `1.0.0`, MINOR returns to "new backward-compatible feature" and MAJOR signals a break. (The
+SemVer spec leaves 0.x minor/patch meaning undefined; this convention matches Terraform's own
+`~> 0.y.z` constraint behaviour.)
 
 ## Quality bar
 
