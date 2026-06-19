@@ -1,8 +1,7 @@
 # Unit tests for the state-backend module. No mock_provider: aws_iam_policy_document only
 # renders under a real provider, so the suite runs the real aws provider OFFLINE (dummy
-# creds + skipped configure-time STS calls) and overrides the one API-backed data source
-# (aws_caller_identity). Every assertion is plan-time and structural — the TLS policy is
-# resolvable at plan because the bucket ARN is constructed from the (known) name.
+# creds + skipped configure-time STS calls). Every assertion is plan-time and structural —
+# the TLS policy is resolvable at plan because the bucket ARN is constructed from the (known) name.
 
 provider "aws" {
   region                      = "us-west-2"
@@ -30,18 +29,6 @@ provider "context" {
     namespace = "ck"
     tenant    = "tooling"
   }
-}
-
-# Resolve the account guard to CK Tooling for every run; the wrong_account run overrides it.
-override_data {
-  target = data.aws_caller_identity.current
-  values = {
-    account_id = "123456789012"
-  }
-}
-
-variables {
-  expected_account_id = "123456789012"
 }
 
 run "bucket_name_follows_label_convention" {
@@ -131,21 +118,4 @@ run "noncurrent_expiry_is_configurable" {
     condition     = aws_s3_bucket_lifecycle_configuration.tfstate.rule[0].id == "expire-noncurrent-30d"
     error_message = "lifecycle rule id must reflect the configured retention"
   }
-}
-
-# The account guard is the safety net against a wrong-credential apply; prove it blocks a
-# plan when the provider resolves to the wrong account.
-run "wrong_account_is_rejected" {
-  command = plan
-
-  override_data {
-    target = data.aws_caller_identity.current
-    values = {
-      account_id = "000000000000"
-    }
-  }
-
-  expect_failures = [
-    aws_s3_bucket.tfstate,
-  ]
 }

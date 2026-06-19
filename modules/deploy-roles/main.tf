@@ -10,8 +10,6 @@
 # Names/tags come from the cloudposse/context provider configured by the consuming root — which
 # must declare the `attributes` property so the plan role can render <...>-plan.
 
-data "aws_caller_identity" "current" {}
-
 locals {
   create_plan = var.hub_plan_role_arn != null
 }
@@ -76,10 +74,6 @@ resource "aws_iam_role" "apply" {
   tags               = merge(data.context_tags.apply.tags, { Name = data.context_label.apply.rendered })
 
   lifecycle {
-    precondition {
-      condition     = data.aws_caller_identity.current.account_id == var.expected_account_id
-      error_message = "Provider resolved to account ${data.aws_caller_identity.current.account_id}; expected ${var.expected_account_id}. Deploy roles must be created in the spoke account."
-    }
     precondition {
       condition     = length(var.apply_policy_arns) > 0 || var.apply_inline_policy != null
       error_message = "the apply role needs permissions: set apply_policy_arns and/or apply_inline_policy (a permissionless deploy role fails every gated apply with AccessDenied)."

@@ -6,8 +6,6 @@
 # This is NOT ck-datalake's tier-bucket (that archetype is ephemeral: always-KMS, versioning
 # off, no Object Lock). Different trust/retention model — do not conflate.
 
-data "aws_caller_identity" "current" {}
-
 # Partition (aws / aws-us-gov / aws-cn) for building the bucket ARN; logical, no API call.
 data "aws_partition" "current" {}
 
@@ -52,10 +50,6 @@ resource "aws_s3_bucket" "this" {
   tags = merge(data.context_tags.this.tags, { Name = data.context_label.this.rendered })
 
   lifecycle {
-    precondition {
-      condition     = var.expected_account_id == null || data.aws_caller_identity.current.account_id == var.expected_account_id
-      error_message = "Provider resolved to account ${data.aws_caller_identity.current.account_id}; expected ${coalesce(var.expected_account_id, "(unset)")}."
-    }
     precondition {
       condition     = var.object_lock == null || var.versioning_enabled
       error_message = "Object Lock requires versioning_enabled = true."

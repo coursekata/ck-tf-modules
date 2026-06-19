@@ -1,8 +1,8 @@
 # Unit tests for the deploy-roles module. The real aws provider runs OFFLINE (dummy creds +
-# skip_* so aws_iam_policy_document renders for the trust assertions); aws_caller_identity is
-# overridden. The context provider is configured per the org standard, WITH `attributes` so the
-# plan role can render <...>-plan. Assertions pin the security-critical trust: each role trusts
-# EXACTLY its hub CI role, never a wildcard, never the other role's CI principal.
+# skip_* so aws_iam_policy_document renders for the trust assertions). The context provider is
+# configured per the org standard, WITH `attributes` so the plan role can render <...>-plan.
+# Assertions pin the security-critical trust: each role trusts EXACTLY its hub CI role, never a
+# wildcard, never the other role's CI principal.
 
 provider "aws" {
   region                      = "us-west-2"
@@ -28,20 +28,11 @@ provider "context" {
   }
 }
 
-# Resolve the account guard to the foundation spoke account for every run; wrong_account overrides.
-override_data {
-  target = data.aws_caller_identity.current
-  values = {
-    account_id = "232672477651"
-  }
-}
-
 variables {
-  expected_account_id = "232672477651"
-  hub_apply_role_arn  = "arn:aws:iam::883385860947:role/ck-tooling-ci-foundation-apply"
-  hub_plan_role_arn   = "arn:aws:iam::883385860947:role/ck-tooling-ci-foundation-plan"
-  apply_policy_arns   = ["arn:aws:iam::aws:policy/AdministratorAccess"] # placeholder perms for the test
-  plan_policy_arns    = ["arn:aws:iam::aws:policy/ReadOnlyAccess"]
+  hub_apply_role_arn = "arn:aws:iam::883385860947:role/ck-tooling-ci-foundation-apply"
+  hub_plan_role_arn  = "arn:aws:iam::883385860947:role/ck-tooling-ci-foundation-plan"
+  apply_policy_arns  = ["arn:aws:iam::aws:policy/AdministratorAccess"] # placeholder perms for the test
+  plan_policy_arns   = ["arn:aws:iam::aws:policy/ReadOnlyAccess"]
 }
 
 run "names_render_from_context" {
@@ -106,21 +97,6 @@ run "apply_only_spoke_omits_plan_role" {
     condition     = aws_iam_role.apply.name == "ck-org-deploy"
     error_message = "the apply role is still created for an apply-only spoke"
   }
-}
-
-run "wrong_account_is_rejected" {
-  command = plan
-
-  override_data {
-    target = data.aws_caller_identity.current
-    values = {
-      account_id = "000000000000"
-    }
-  }
-
-  expect_failures = [
-    aws_iam_role.apply,
-  ]
 }
 
 run "permissionless_apply_role_is_rejected" {

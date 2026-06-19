@@ -9,6 +9,7 @@ quality bar, not the delivery gate.
 
 | Module | Purpose |
 |--------|---------|
+| [`account-guard`](modules/account-guard) | Root-preamble guard: asserts the running credential resolves to the expected account and fails the plan otherwise. Every root calls it once per provider. |
 | [`context-schema`](modules/context-schema) | Outputs-only module emitting the org labeling schema (property order, slots, tag-case) that each root's `cloudposse/context` provider is configured from. |
 | [`deploy-roles`](modules/deploy-roles) | Spoke plan (RO) + apply (RW) IAM roles for the OIDC hub-spoke delivery model — standardized trust, caller-supplied permissions. |
 | [`s3-bucket`](modules/s3-bucket) | Hardened, durable S3 bucket archetype for security/audit buckets, with a generic ARN-free `grants` seam for service-delivery policies. |
@@ -38,7 +39,7 @@ the ref via PRs):
 ```hcl
 # providers.tf — configure the context provider from the context-schema module.
 module "context_schema" {
-  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/context-schema?ref=v0.2.1"
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/context-schema?ref=v0.3.0"
 }
 
 provider "context" {
@@ -48,11 +49,15 @@ provider "context" {
   values          = { namespace = "ck", tenant = "tooling" } # each repo sets its own
 }
 
-# main.tf — slots come from the provider; a module takes only its own inputs
-module "state_backend" {
-  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/state-backend?ref=v0.2.1"
+# main.tf — every root guards its account first, then calls its modules (slots come from the provider)
+module "account_guard" {
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/account-guard?ref=v0.3.0"
 
   expected_account_id = "123456789012"
+}
+
+module "state_backend" {
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/state-backend?ref=v0.3.0"
 }
 ```
 

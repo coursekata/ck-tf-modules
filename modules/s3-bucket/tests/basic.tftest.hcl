@@ -223,22 +223,6 @@ run "versioning_suspended" {
   }
 }
 
-# --- Wrong-account credential must fail at plan (the account-guard safety net) ---
-run "wrong_account_is_rejected" {
-  command = plan
-
-  variables {
-    name                = "wrongacct"
-    expected_account_id = "999999999999"
-    tls_only            = false
-    object_ownership    = null
-  }
-
-  expect_failures = [
-    aws_s3_bucket.this,
-  ]
-}
-
 # --- object_lock with both retention_years and retention_days is rejected at input ---
 run "object_lock_rejects_both_year_and_day_retention" {
   command = plan

@@ -7,9 +7,9 @@ root's `backend.tf` — no DynamoDB table).
 Bucket name + tags come from the **`cloudposse/context` provider** (pinned `~> 0.5.0`),
 which the **consuming root configures** with the org policy and its namespace/tenant; the
 module just sets `name = "tfstate"` and pins the state-bucket property order, yielding
-`<namespace>-<tenant>[-<stage>]-tfstate`. The bucket is **pinned to `expected_account_id`**:
-a precondition fails the plan if the provider resolved to a different account, so a
-wrong-profile apply can never create state in the wrong place.
+`<namespace>-<tenant>[-<stage>]-tfstate`. The wrong-account guard is the **root's** job — every
+root calls the shared [`account-guard`](../account-guard) module as its preamble — so this module
+takes no `expected_account_id`.
 
 Hardening: versioning on, all four public-access-block controls on, SSE-S3
 (AES256) by default, a `DenyInsecureTransport` (TLS-only) bucket policy, and a
@@ -45,16 +45,14 @@ provider "context" {
 
 # main.tf — namespace/tenant come from the provider, not the module
 module "state_backend" {
-  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/state-backend?ref=v0.1.0"
-
-  expected_account_id = "123456789012" # provider MUST resolve here or the plan fails
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/state-backend?ref=v0.3.0"
 }
 
 # outputs.tf
 output "bucket_name" { value = module.state_backend.bucket_name }
 ```
 
-Authenticate to `expected_account_id`, then create the bucket. State is local at
+Authenticate to the target account, then create the bucket. State is local at
 this point:
 
 ```sh
@@ -114,9 +112,7 @@ root's `context` provider):
 
 ```hcl
 module "state_backend" {
-  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/state-backend?ref=v0.1.0"
-
-  expected_account_id = "123456789012"
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/state-backend?ref=v0.3.0"
 }
 ```
 
@@ -188,7 +184,6 @@ No modules.
 | [aws_s3_bucket_public_access_block.tfstate](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_public_access_block) | resource |
 | [aws_s3_bucket_server_side_encryption_configuration.tfstate](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_server_side_encryption_configuration) | resource |
 | [aws_s3_bucket_versioning.tfstate](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/s3_bucket_versioning) | resource |
-| [aws_caller_identity.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/caller_identity) | data source |
 | [aws_iam_policy_document.tls_only](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_partition.current](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/partition) | data source |
 | [context_label.this](https://registry.terraform.io/providers/cloudposse/context/latest/docs/data-sources/label) | data source |
@@ -198,7 +193,6 @@ No modules.
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
-| <a name="input_expected_account_id"></a> [expected\_account\_id](#input\_expected\_account\_id) | AWS account the bucket must be created in. A precondition fails the plan if the provider resolves to a different account, so a wrong-profile apply can't land the bucket elsewhere. | `string` | n/a | yes |
 | <a name="input_noncurrent_version_expiration_days"></a> [noncurrent\_version\_expiration\_days](#input\_noncurrent\_version\_expiration\_days) | Days to retain noncurrent object versions before expiry. Versioning keeps state history; this bounds how long superseded versions accumulate. | `number` | `90` | no |
 
 ## Outputs

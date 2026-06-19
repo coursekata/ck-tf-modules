@@ -1,11 +1,8 @@
 # Reusable state-backend: an S3 bucket hardened to back an OpenTofu root's state via the
 # 1.11+ native S3 lockfile (`use_lockfile = true` in the consumer's backend.tf — no
 # DynamoDB table). The consuming root supplies the provider (and its default_tags); this
-# module configures none.
-#
-# The bucket is pinned to var.expected_account_id: a precondition fails the plan if the
-# provider resolved to a different account, so a wrong-profile apply can never create state
-# in the wrong place.
+# module configures none. (The wrong-account guard is the root's job — every root calls the shared
+# account-guard module as its preamble — so this module no longer takes an expected_account_id.)
 
 # Bucket name + tags come from the cloudposse/context PROVIDER, configured by the consuming
 # root with the org policy (required namespace, property order) and this repo's namespace/
@@ -20,9 +17,6 @@ data "context_label" "this" {
 data "context_tags" "this" {
   values = { name = "tfstate" }
 }
-
-# Guard: assert the provider resolved to the intended account before anything is created.
-data "aws_caller_identity" "current" {}
 
 # Construct the bucket ARN from its (plan-known) name rather than referencing
 # aws_s3_bucket.tfstate.arn, so the TLS policy document resolves fully at plan time (no
@@ -44,13 +38,6 @@ resource "aws_s3_bucket" "tfstate" {
   # context_tags sets Name to the `name` value ("tfstate"); pin it to the full id instead —
   # the useful AWS convention (and what null-label did), so the Name tag is the bucket's name.
   tags = merge(data.context_tags.this.tags, { Name = data.context_label.this.rendered })
-
-  lifecycle {
-    precondition {
-      condition     = data.aws_caller_identity.current.account_id == var.expected_account_id
-      error_message = "Provider resolved to account ${data.aws_caller_identity.current.account_id}; expected ${var.expected_account_id}. This state bucket must be created in its intended account."
-    }
-  }
 }
 
 data "aws_iam_policy_document" "tls_only" {
