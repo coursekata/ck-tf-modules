@@ -9,9 +9,12 @@
 # Partition (aws / aws-us-gov / aws-cn) for building the bucket ARN; logical, no API call.
 data "aws_partition" "current" {}
 
-# Name + tags from the context provider. `attributes` is omitted from the rendered id when empty.
+# Name + tags from the context provider, in the org canonical order. environment + surface render
+# only when the consuming root populates them (e.g. ck-datalake tier buckets:
+# ck-datalake-stg-raw-app); they drop out for single-env audit buckets (ck-org-cloudtrail-logs).
+# `attributes` is omitted from the rendered id when empty.
 data "context_label" "this" {
-  properties = var.attributes == "" ? ["namespace", "tenant", "name"] : ["namespace", "tenant", "name", "attributes"]
+  properties = var.attributes == "" ? ["namespace", "domain", "environment", "surface", "name"] : ["namespace", "domain", "environment", "surface", "name", "attributes"]
   values     = { name = var.name, attributes = var.attributes }
 }
 

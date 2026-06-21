@@ -5,9 +5,10 @@ OpenTofu 1.11+ **native S3 lockfile** (`use_lockfile = true` in the consuming
 root's `backend.tf` — no DynamoDB table).
 
 Bucket name + tags come from the **`cloudposse/context` provider** (pinned `~> 0.5.0`),
-which the **consuming root configures** with the org policy and its namespace/tenant; the
-module just sets `name = "tfstate"` and pins the state-bucket property order, yielding
-`<namespace>-<tenant>[-<stage>]-tfstate`. The wrong-account guard is the **root's** job — every
+which the **consuming root configures** with the org policy and its namespace/domain; the
+module just sets `name = "tfstate"` and pins the state-bucket property order. The bucket is
+**one per domain and deliberately env-less** — the bootstrap root leaves `environment`/`surface`
+empty — so it renders `ck-<domain>-tfstate` (e.g. `ck-tooling-tfstate`). The wrong-account guard is the **root's** job — every
 root calls the shared [`account-guard`](../account-guard) module as its preamble — so this module
 takes no `expected_account_id`.
 
@@ -32,20 +33,21 @@ the local state file is thrown away.
 ### Step 1 — create the bucket (local state)
 
 In the bootstrap root, configure the **`context` provider** (org policy + this repo's
-namespace/tenant), call the module, and **re-export `bucket_name`**. Do **not** add a
+namespace/domain), call the module, and **re-export `bucket_name`**. Do **not** add a
 `backend.tf` yet.
 
 ```hcl
-# providers.tf — the org context (each repo sets its own namespace/tenant)
+# providers.tf — the org context (each repo sets its own namespace/domain; typically from the
+# context-schema module). Leave environment/surface unset so the state bucket stays env-less.
 provider "context" {
-  property_order = ["namespace", "tenant", "stage", "name"]
-  properties     = { namespace = { required = true, min_length = 1 }, tenant = {}, stage = {}, name = {} }
-  values         = { namespace = "ck", tenant = "tooling" } # → bucket "ck-tooling-tfstate"
+  property_order = ["namespace", "domain", "environment", "surface", "name"]
+  properties     = { namespace = { required = true, min_length = 1 }, domain = {}, environment = {}, surface = {}, name = {} }
+  values         = { namespace = "ck", domain = "tooling" } # → bucket "ck-tooling-tfstate"
 }
 
-# main.tf — namespace/tenant come from the provider, not the module
+# main.tf — namespace/domain come from the provider, not the module
 module "state_backend" {
-  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/state-backend?ref=v0.3.0"
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/state-backend?ref=v0.4.0"
 }
 
 # outputs.tf
@@ -107,19 +109,19 @@ plan.
 
 ### Refresher (already-bootstrapped root)
 
-Minimal call once the bucket and `backend.tf` already exist (namespace/tenant come from the
+Minimal call once the bucket and `backend.tf` already exist (namespace/domain come from the
 root's `context` provider):
 
 ```hcl
 module "state_backend" {
-  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/state-backend?ref=v0.3.0"
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/state-backend?ref=v0.4.0"
 }
 ```
 
 ## Pointing downstream roots at this bucket
 
-The module is called **once per repo/tenant** (from `bootstrap/state-backend/`) and
-creates exactly one bucket — `<namespace>-<tenant>-tfstate` from the `context` provider,
+The module is called **once per repo/domain** (from `bootstrap/state-backend/`) and
+creates exactly one bucket — `ck-<domain>-tfstate` from the `context` provider,
 e.g. `ck-tooling-tfstate`. That single bucket holds the state of **every** root in the
 repo, not just the bootstrap root that owns it.
 

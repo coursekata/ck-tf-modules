@@ -21,21 +21,24 @@ wrong-account guard is the **root's** job — the root calls the shared
 ## Usage (a spoke's `bootstrap/deploy-roles` root)
 
 ```hcl
-# providers.tf — the org context (this repo's namespace/tenant; declare `attributes`)
+# providers.tf — the org context (this repo's namespace/domain; declare `attributes`).
+# Typically sourced from the context-schema module; shown expanded here.
 provider "context" {
-  property_order  = ["namespace", "tenant", "name", "attributes"]
+  property_order  = ["namespace", "domain", "environment", "surface", "name", "attributes"]
   tags_value_case = "lower"
   properties = {
-    namespace  = { required = true, min_length = 1, validation_regex = "^[a-z0-9-]+$" }
-    tenant     = { validation_regex = "^[a-z0-9-]*$" }
-    name       = { validation_regex = "^[a-z0-9-]*$" }
-    attributes = { validation_regex = "^[a-z0-9-]*$" }
+    namespace   = { required = true, min_length = 1, validation_regex = "^[a-z0-9-]+$" }
+    domain      = { validation_regex = "^[a-z0-9-]*$" }
+    environment = { validation_regex = "^[a-z0-9-]*$" }
+    surface     = { validation_regex = "^[a-z0-9-]*$" }
+    name        = { validation_regex = "^[a-z0-9-]*$" }
+    attributes  = { validation_regex = "^[a-z0-9-]*$" }
   }
-  values = { namespace = "ck", tenant = "org" }
+  values = { namespace = "ck", domain = "org" } # -> ck-org-deploy[-plan]; a per-surface spoke adds surface = "api"
 }
 
 module "deploy_roles" {
-  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/deploy-roles?ref=v0.3.0"
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/deploy-roles?ref=v0.4.0"
 
   # The hub CI roles permitted to assume each spoke role (from ck-tooling/environments/hub):
   hub_apply_role_arn = "arn:aws:iam::883385860947:role/ck-tooling-ci-foundation-apply"
@@ -95,7 +98,7 @@ No modules.
 | <a name="input_apply_inline_policy"></a> [apply\_inline\_policy](#input\_apply\_inline\_policy) | Optional inline IAM policy JSON for the apply (RW) deploy role (e.g. from a data.aws\_iam\_policy\_document). | `string` | `null` | no |
 | <a name="input_apply_policy_arns"></a> [apply\_policy\_arns](#input\_apply\_policy\_arns) | Managed IAM policy ARNs attached to the apply (RW) deploy role — the spoke's deploy permissions. Use these or apply\_inline\_policy (at least one is required). | `list(string)` | `[]` | no |
 | <a name="input_hub_plan_role_arn"></a> [hub\_plan\_role\_arn](#input\_hub\_plan\_role\_arn) | ARN of the hub CI PLAN role permitted to sts:AssumeRole the plan (RO) deploy role. Leave null for an apply-only spoke (no PR plan role is created). | `string` | `null` | no |
-| <a name="input_name"></a> [name](#input\_name) | The context `name` slot for the roles. Renders as <namespace>-<tenant>-<name> (apply) and <namespace>-<tenant>-<name>-plan (plan), e.g. ck-org-deploy / ck-org-deploy-plan. | `string` | `"deploy"` | no |
+| <a name="input_name"></a> [name](#input\_name) | The context `name` slot for the roles. Renders as <namespace>-<domain>[-<surface>]-<name> (apply) and the same plus -plan (plan), e.g. ck-org-deploy / ck-org-deploy-plan, or ck-app-api-deploy for a per-surface spoke. | `string` | `"deploy"` | no |
 | <a name="input_plan_inline_policy"></a> [plan\_inline\_policy](#input\_plan\_inline\_policy) | Optional inline IAM policy JSON for the plan (RO) deploy role. Only used when hub\_plan\_role\_arn is set. | `string` | `null` | no |
 | <a name="input_plan_policy_arns"></a> [plan\_policy\_arns](#input\_plan\_policy\_arns) | Managed IAM policy ARNs attached to the plan (RO) deploy role. Only used when hub\_plan\_role\_arn is set. | `list(string)` | `[]` | no |
 

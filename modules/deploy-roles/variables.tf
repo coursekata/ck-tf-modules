@@ -1,4 +1,4 @@
-# Namespace/tenant and tags come from the cloudposse/context PROVIDER (configured by the
+# Namespace/domain and tags come from the cloudposse/context PROVIDER (configured by the
 # consuming root, which must declare the `attributes` property so the plan role renders
 # <...>-plan). Only the inputs below are specific to this module.
 
@@ -48,7 +48,7 @@ variable "plan_inline_policy" {
 }
 
 variable "name" {
-  description = "The context `name` slot for the roles. Renders as <namespace>-<tenant>-<name> (apply) and <namespace>-<tenant>-<name>-plan (plan), e.g. ck-org-deploy / ck-org-deploy-plan."
+  description = "The context `name` slot for the roles. Renders as <namespace>-<domain>[-<surface>]-<name> (apply) and the same plus -plan (plan), e.g. ck-org-deploy / ck-org-deploy-plan, or ck-app-api-deploy for a per-surface spoke."
   type        = string
   default     = "deploy"
 

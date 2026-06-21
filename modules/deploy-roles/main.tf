@@ -14,9 +14,12 @@ locals {
   create_plan = var.hub_plan_role_arn != null
 }
 
-# Role names: apply = <namespace>-<tenant>-<name> (e.g. ck-org-deploy); plan = <...>-<name>-plan.
+# Role names follow the org canonical order: apply = <namespace>-<domain>[-<env>][-<surface>]-<name>
+# (e.g. ck-org-deploy, or ck-app-api-deploy for a per-surface spoke); plan = <...>-<name>-plan.
+# environment/surface render only when the consuming root populates them; they drop out for a
+# single-surface domain spoke like foundation (ck-org-deploy).
 data "context_label" "apply" {
-  properties = ["namespace", "tenant", "name"]
+  properties = ["namespace", "domain", "environment", "surface", "name"]
   values     = { name = var.name }
 }
 
@@ -27,7 +30,7 @@ data "context_tags" "apply" {
 data "context_label" "plan" {
   count = local.create_plan ? 1 : 0
 
-  properties = ["namespace", "tenant", "name", "attributes"]
+  properties = ["namespace", "domain", "environment", "surface", "name", "attributes"]
   values     = { name = var.name, attributes = "plan" }
 }
 

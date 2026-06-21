@@ -33,31 +33,31 @@ Modules configure **no provider** — the consuming root supplies it (and its `d
 Modules derive names/tags from the **`cloudposse/context` provider**, so a consuming root
 configures it **once**: the org schema comes from the [`context-schema`](modules/context-schema)
 module (canonical spec: [`docs/labeling-standard.md`](docs/labeling-standard.md)), and the root
-supplies only its namespace/tenant. Module `source`s pin a released **git tag** (Dependabot bumps
+supplies only its namespace/domain. Module `source`s pin a released **git tag** (Dependabot bumps
 the ref via PRs):
 
 ```hcl
 # providers.tf — configure the context provider from the context-schema module.
 module "context_schema" {
-  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/context-schema?ref=v0.3.0"
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/context-schema?ref=v0.4.0"
 }
 
 provider "context" {
   property_order  = module.context_schema.property_order
   properties      = module.context_schema.properties
   tags_value_case = module.context_schema.tags_value_case
-  values          = { namespace = "ck", tenant = "tooling" } # each repo sets its own
+  values          = { namespace = "ck", domain = "tooling" } # each repo sets its own
 }
 
 # main.tf — every root guards its account first, then calls its modules (slots come from the provider)
 module "account_guard" {
-  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/account-guard?ref=v0.3.0"
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/account-guard?ref=v0.4.0"
 
   expected_account_id = "123456789012"
 }
 
 module "state_backend" {
-  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/state-backend?ref=v0.3.0"
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/state-backend?ref=v0.4.0"
 }
 ```
 

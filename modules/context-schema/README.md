@@ -5,7 +5,7 @@ configuration. An **outputs-only** module (no resources, no providers): it emits
 *schema* — `property_order`, the property `properties` definition + validation, and
 `tags_value_case` — but **no values**. The schema then lives in ONE versioned place instead of
 being hand-copied into every consuming root, which supplies only its repo-specific `values`
-(`namespace`/`tenant`).
+(`namespace`/`domain`[/`environment`/`surface`]).
 
 This module does **not** install or replace the `cloudposse/context` provider — you still
 declare that provider in `required_providers` as usual. It only supplies the *configuration*
@@ -30,7 +30,7 @@ terraform {
 
 # 2. Pull the org labeling schema.
 module "context_schema" {
-  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/context-schema?ref=v0.2.1"
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/context-schema?ref=v0.4.0"
 }
 
 # 3. Configure the provider from the module; supply only this repo's values.
@@ -41,7 +41,8 @@ provider "context" {
 
   values = {
     namespace = "ck"
-    tenant    = "org" # this repo's discriminator
+    domain    = "org" # this repo's discriminator
+    # environment / surface — set only by multi-env / multi-surface repos (e.g. ck-datalake)
   }
 }
 ```
@@ -49,9 +50,10 @@ provider "context" {
 Resources then read `data.context_label` (names) and `data.context_tags` (tags) as usual —
 this changes only where the provider's *config* comes from, not how you consume it.
 
-Every root declares the **full property union** (`namespace`, `tenant`, `stage`, `name`,
-`attributes`) even if it renders only a subset — each `data.context_label` picks its own
-slots, so a wider schema never changes a rendered id but keeps every provider block identical.
+Every root declares the **full property union** (`namespace`, `domain`, `environment`,
+`surface`, `name`, `attributes`) even if it renders only a subset — each `data.context_label`
+picks its own slots, so a wider schema never changes a rendered id but keeps every provider
+block identical.
 
 > **Adoption note:** configuring a provider from a module output is a supported but
 > lightly-trodden path. The uniform property shape (every slot sets `required`/`min_length`/

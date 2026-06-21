@@ -13,11 +13,21 @@ run "emits_the_org_context_schema" {
     error_message = "namespace must be the required, non-empty slot"
   }
   assert {
-    condition     = output.properties["tenant"].required == false && output.properties["attributes"].required == false
+    condition     = output.properties["domain"].required == false && output.properties["attributes"].required == false
     error_message = "only namespace is required; the rest are optional"
   }
+  # Pin the full canonical order. environment + surface are optional (empty for single-env repos,
+  # so they render away) but must occupy their canonical positions so a multi-env repo (ck-datalake)
+  # renders ck-<domain>-<environment>-<surface>-<name> and every root's provider block is identical.
   assert {
-    condition     = contains(output.property_order, "stage") && contains(output.property_order, "attributes")
-    error_message = "property_order must declare the full union (both stage and attributes) so every root's block is identical"
+    condition = (
+      output.property_order[0] == "namespace" &&
+      output.property_order[1] == "domain" &&
+      output.property_order[2] == "environment" &&
+      output.property_order[3] == "surface" &&
+      output.property_order[4] == "name" &&
+      output.property_order[5] == "attributes"
+    )
+    error_message = "property_order must be the canonical [namespace, domain, environment, surface, name, attributes]"
   }
 }
