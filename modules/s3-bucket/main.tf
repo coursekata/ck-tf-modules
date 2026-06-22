@@ -1,10 +1,11 @@
-# A hardened, durable S3 bucket primitive for org security/audit buckets (CloudTrail archive,
-# Config delivery, …). Always-on baseline: public access fully blocked, TLS-only by default,
-# versioning, SSE. Optional: Object Lock default retention, lifecycle expiry, SSE-KMS, and
-# service-delivery grants merged into the bucket policy (see var.grants).
-#
-# This is NOT ck-datalake's tier-bucket (that archetype is ephemeral: always-KMS, versioning
-# off, no Object Lock). Different trust/retention model — do not conflate.
+# A hardened S3 bucket primitive serving two shapes from one parameterized module: org
+# security/audit buckets (CloudTrail archive, Config delivery — versioning + optional Object Lock,
+# durable) AND ck-datalake ephemeral data-tier buckets (versioning off, prefix-scoped expiry, an
+# optional dedicated CMK). Keeping them one module means the org's bucket-hardening invariants live
+# in a single place instead of drifting between two near-identical copies. Always-on baseline:
+# public access fully blocked, TLS-only by default, versioning, SSE. Optional: Object Lock default
+# retention, lifecycle expiry, SSE-KMS (a passed kms_key_arn or a created CMK), and grants — to
+# service OR AWS principals — merged into the bucket policy (see var.grants).
 
 # Partition (aws / aws-us-gov / aws-cn) for building the bucket ARN; logical, no API call.
 data "aws_partition" "current" {}
@@ -15,42 +16,60 @@ data "aws_partition" "current" {}
 # `attributes` is omitted from the rendered id when empty.
 data "context_label" "this" {
   properties = var.attributes == "" ? ["namespace", "domain", "environment", "surface", "name"] : ["namespace", "domain", "environment", "surface", "name", "attributes"]
-  values     = { name = var.name, attributes = var.attributes }
+  values     = local.label_values
 }
 
 data "context_tags" "this" {
-  values = { name = var.name, attributes = var.attributes }
+  values = local.label_values
 }
 
 locals {
+  # Slot values shared by the label (name) and the tags. environment/surface are call-time
+  # overrides included ONLY when set, so a single-env consumer (foundation/tooling) leaves them to
+  # the provider (empty) and stays byte-identical, while a datalake tier passes them per bucket.
+  label_values = merge(
+    { name = var.name, attributes = var.attributes },
+    var.environment != "" ? { environment = var.environment } : {},
+    var.surface != "" ? { surface = var.surface } : {},
+  )
+
+  # The bucket's literal name: the convention id by default, or the override when adopting a
+  # pre-existing externally-named bucket. The context label/tags are still computed from the slots
+  # (so the bucket keeps its Domain/Environment/… classification) — only the id + Name tag differ.
+  bucket_name = var.bucket_name_override != "" ? var.bucket_name_override : data.context_label.this.rendered
+
   object_lock_enabled = var.object_lock != null
-  use_kms             = var.kms_key_arn != null
+
+  # create_kms and kms_key_arn are the two SSE-KMS sources, mutually exclusive (validated). Resolve
+  # the effective key once here; a created key's arn comes via the splat (null until create_kms is on).
+  use_kms     = var.create_kms || var.kms_key_arn != null
+  kms_key_arn = var.create_kms ? one(aws_kms_key.this[*].arn) : var.kms_key_arn
+
   has_lifecycle = var.lifecycle_rule != null && anytrue([
     try(var.lifecycle_rule.expiration_days, null) != null,
     try(var.lifecycle_rule.noncurrent_version_expiration_days, null) != null,
     try(var.lifecycle_rule.abort_incomplete_multipart_days, null) != null,
   ])
-  build_policy = var.tls_only || length(var.grants) > 0
+  build_policy = var.tls_only || length(var.grants) > 0 || var.require_sse_kms
 
-  # The bucket's own ARN, built from the SAME rendered name the bucket is created with. An S3 ARN
-  # is always arn:<partition>:s3:::<name>, so this equals aws_s3_bucket.this.arn — but it is known
-  # at plan (the resource attribute is not), which keeps the whole policy determinable at plan and
-  # means a grant never has to carry a bucket reference.
-  bucket_arn = "arn:${data.aws_partition.current.partition}:s3:::${data.context_label.this.rendered}"
+  # The bucket's own ARN, built from the SAME name the bucket is created with. An S3 ARN is always
+  # arn:<partition>:s3:::<name>, so this equals aws_s3_bucket.this.arn — but it is known at plan
+  # (the resource attribute is not), which keeps the whole policy determinable at plan and means a
+  # grant never has to carry a bucket reference.
+  bucket_arn = "arn:${data.aws_partition.current.partition}:s3:::${local.bucket_name}"
 }
 
 # Server access logging is intentionally omitted — data-plane auditing is expected to come from
-# a separate CloudTrail/data-events trail, not per-bucket logs. SSE-S3 is the default; pass
-# kms_key_arn for SSE-KMS.
+# a separate CloudTrail/data-events trail, not per-bucket logs.
 # trivy:ignore:AVD-AWS-0089
 # trivy:ignore:AVD-AWS-0132
 resource "aws_s3_bucket" "this" {
-  bucket              = data.context_label.this.rendered
+  bucket              = local.bucket_name
   object_lock_enabled = local.object_lock_enabled
 
-  # context_tags emits Name = the bare `name` slot; pin it to the full rendered id (the AWS
+  # context_tags emits Name = the bare `name` slot; pin it to the bucket's full name (the AWS
   # console convention). Owner/Repo/ManagedBy come from the root provider's default_tags.
-  tags = merge(data.context_tags.this.tags, { Name = data.context_label.this.rendered })
+  tags = merge(data.context_tags.this.tags, { Name = local.bucket_name })
 
   lifecycle {
     precondition {
@@ -88,6 +107,26 @@ resource "aws_s3_bucket_versioning" "this" {
   }
 }
 
+# Optional dedicated CMK (create_kms). The key POLICY is intentionally NOT set here — the bucket
+# gets AWS's default root key policy, and the caller may attach an aws_kms_key_policy (via the
+# kms_key_id/kms_key_arn outputs) to grant concrete principal ARNs (e.g. a data-export role),
+# keeping this module a pure storage primitive rather than baking principals into a naming convention.
+resource "aws_kms_key" "this" {
+  count = var.create_kms ? 1 : 0
+
+  description             = "CMK for ${local.bucket_name}."
+  enable_key_rotation     = true
+  deletion_window_in_days = 30
+  tags                    = data.context_tags.this.tags
+}
+
+resource "aws_kms_alias" "this" {
+  count = var.create_kms ? 1 : 0
+
+  name          = "alias/${local.bucket_name}"
+  target_key_id = one(aws_kms_key.this[*].id)
+}
+
 # trivy:ignore:AVD-AWS-0132
 resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
   bucket = aws_s3_bucket.this.id
@@ -95,7 +134,7 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
   rule {
     apply_server_side_encryption_by_default {
       sse_algorithm     = local.use_kms ? "aws:kms" : "AES256"
-      kms_master_key_id = var.kms_key_arn
+      kms_master_key_id = local.kms_key_arn
     }
     bucket_key_enabled = local.use_kms
   }
@@ -122,7 +161,12 @@ resource "aws_s3_bucket_lifecycle_configuration" "this" {
     id     = "retention"
     status = "Enabled"
 
-    filter {}
+    # Empty prefix ("") is the bucket-wide filter (the default). A non-empty expiration_prefix
+    # scopes expiry to one key prefix — e.g. a tier that expires only "_athena-results/" while
+    # leaving table data alone.
+    filter {
+      prefix = try(var.lifecycle_rule.expiration_prefix, "")
+    }
 
     dynamic "expiration" {
       for_each = try(var.lifecycle_rule.expiration_days, null) != null ? [1] : []
@@ -185,9 +229,12 @@ data "aws_iam_policy_document" "this" {
       actions   = statement.value.actions
       resources = [for ks in statement.value.key_suffixes : ks == "" ? local.bucket_arn : "${local.bucket_arn}${ks}"]
 
+      # The grant's XOR validation guarantees exactly one principal is set, which is what makes
+      # coalesce safe here — it skips the null and lands on the one present; the type then matches
+      # whichever it was (an AWS principal ARN vs. a Service principal).
       principals {
-        type        = "Service"
-        identifiers = [statement.value.principal_service]
+        type        = statement.value.principal_aws != null ? "AWS" : "Service"
+        identifiers = [coalesce(statement.value.principal_aws, statement.value.principal_service)]
       }
 
       dynamic "condition" {
@@ -197,6 +244,52 @@ data "aws_iam_policy_document" "this" {
           variable = condition.value.variable
           values   = condition.value.values
         }
+      }
+    }
+  }
+
+  # Optional encryption invariant (require_sse_kms): refuse any PutObject not SSE-KMS-encrypted with
+  # THIS bucket's CMK. StringNotEqualsIfExists denies a header-less upload too (an absent header
+  # satisfies the != test) — so every writer must send the SSE-KMS headers explicitly. Inert
+  # without a CMK (the require_sse_kms validation guarantees one).
+  dynamic "statement" {
+    for_each = var.require_sse_kms ? [1] : []
+    content {
+      sid       = "DenyNonKmsUploads"
+      effect    = "Deny"
+      actions   = ["s3:PutObject"]
+      resources = ["${local.bucket_arn}/*"]
+
+      principals {
+        type        = "*"
+        identifiers = ["*"]
+      }
+
+      condition {
+        test     = "StringNotEqualsIfExists"
+        variable = "s3:x-amz-server-side-encryption"
+        values   = ["aws:kms"]
+      }
+    }
+  }
+
+  dynamic "statement" {
+    for_each = var.require_sse_kms ? [1] : []
+    content {
+      sid       = "DenyWrongKmsKey"
+      effect    = "Deny"
+      actions   = ["s3:PutObject"]
+      resources = ["${local.bucket_arn}/*"]
+
+      principals {
+        type        = "*"
+        identifiers = ["*"]
+      }
+
+      condition {
+        test     = "StringNotEqualsIfExists"
+        variable = "s3:x-amz-server-side-encryption-aws-kms-key-id"
+        values   = [local.kms_key_arn]
       }
     }
   }
