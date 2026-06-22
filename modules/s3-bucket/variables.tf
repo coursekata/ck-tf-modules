@@ -23,6 +23,24 @@ variable "attributes" {
   }
 }
 
+variable "bucket_name_override" {
+  description = <<-EOT
+    ESCAPE HATCH — the bucket's literal name, bypassing the context-rendered convention. Use ONLY
+    to adopt a PRE-EXISTING, externally-referenced bucket (a name baked into an asset/CDN URL or
+    another system) that cannot be renamed without breaking references — i.e. to import it to
+    no-diff. NEW buckets must leave this "" and take the convention name. The classification still
+    comes from the slots: `name` and the context provider still drive the Domain/Environment/Name/…
+    tags; only the bucket id + its `Name` tag take this literal value.
+  EOT
+  type        = string
+  default     = ""
+
+  validation {
+    condition     = var.bucket_name_override == "" || can(regex("^[a-z0-9][a-z0-9.-]{1,61}[a-z0-9]$", var.bucket_name_override))
+    error_message = "bucket_name_override must be a valid S3 bucket name (3-63 chars; lowercase letters, digits, dots, hyphens; start/end alphanumeric) or empty."
+  }
+}
+
 variable "versioning_enabled" {
   description = "Enable S3 versioning. Must be true when object_lock is set."
   type        = bool

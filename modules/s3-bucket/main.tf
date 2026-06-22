@@ -33,6 +33,11 @@ locals {
     var.surface != "" ? { surface = var.surface } : {},
   )
 
+  # The bucket's literal name: the convention id by default, or the override when adopting a
+  # pre-existing externally-named bucket. The context label/tags are still computed from the slots
+  # (so the bucket keeps its Domain/Environment/… classification) — only the id + Name tag differ.
+  bucket_name = var.bucket_name_override != "" ? var.bucket_name_override : data.context_label.this.rendered
+
   object_lock_enabled = var.object_lock != null
 
   # create_kms and kms_key_arn are the two SSE-KMS sources, mutually exclusive (validated). Resolve
@@ -47,11 +52,11 @@ locals {
   ])
   build_policy = var.tls_only || length(var.grants) > 0 || var.require_sse_kms
 
-  # The bucket's own ARN, built from the SAME rendered name the bucket is created with. An S3 ARN
-  # is always arn:<partition>:s3:::<name>, so this equals aws_s3_bucket.this.arn — but it is known
-  # at plan (the resource attribute is not), which keeps the whole policy determinable at plan and
-  # means a grant never has to carry a bucket reference.
-  bucket_arn = "arn:${data.aws_partition.current.partition}:s3:::${data.context_label.this.rendered}"
+  # The bucket's own ARN, built from the SAME name the bucket is created with. An S3 ARN is always
+  # arn:<partition>:s3:::<name>, so this equals aws_s3_bucket.this.arn — but it is known at plan
+  # (the resource attribute is not), which keeps the whole policy determinable at plan and means a
+  # grant never has to carry a bucket reference.
+  bucket_arn = "arn:${data.aws_partition.current.partition}:s3:::${local.bucket_name}"
 }
 
 # Server access logging is intentionally omitted — data-plane auditing is expected to come from
@@ -59,12 +64,12 @@ locals {
 # trivy:ignore:AVD-AWS-0089
 # trivy:ignore:AVD-AWS-0132
 resource "aws_s3_bucket" "this" {
-  bucket              = data.context_label.this.rendered
+  bucket              = local.bucket_name
   object_lock_enabled = local.object_lock_enabled
 
-  # context_tags emits Name = the bare `name` slot; pin it to the full rendered id (the AWS
+  # context_tags emits Name = the bare `name` slot; pin it to the bucket's full name (the AWS
   # console convention). Owner/Repo/ManagedBy come from the root provider's default_tags.
-  tags = merge(data.context_tags.this.tags, { Name = data.context_label.this.rendered })
+  tags = merge(data.context_tags.this.tags, { Name = local.bucket_name })
 
   lifecycle {
     precondition {
@@ -109,7 +114,7 @@ resource "aws_s3_bucket_versioning" "this" {
 resource "aws_kms_key" "this" {
   count = var.create_kms ? 1 : 0
 
-  description             = "CMK for ${data.context_label.this.rendered}."
+  description             = "CMK for ${local.bucket_name}."
   enable_key_rotation     = true
   deletion_window_in_days = 30
   tags                    = data.context_tags.this.tags
@@ -118,7 +123,7 @@ resource "aws_kms_key" "this" {
 resource "aws_kms_alias" "this" {
   count = var.create_kms ? 1 : 0
 
-  name          = "alias/${data.context_label.this.rendered}"
+  name          = "alias/${local.bucket_name}"
   target_key_id = one(aws_kms_key.this[*].id)
 }
 

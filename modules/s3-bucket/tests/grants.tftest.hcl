@@ -91,3 +91,44 @@ run "grants_inject_the_bucket_arn_into_the_policy" {
     error_message = "the tls-only deny must remain alongside the grants"
   }
 }
+
+# bucket_name_override: adopt a pre-existing externally-named bucket (the app's cross-account
+# write case — a legacy asset bucket the mgmt account writes into). The literal name is used, the
+# policy targets THAT bucket's ARN, and the slot tags still classify it.
+run "bucket_name_override_adopts_a_legacy_bucket" {
+  command = plan
+
+  variables {
+    name                 = "assets"            # classification only — drives the slot tags
+    bucket_name_override = "coursekata-assets" # the literal externally-referenced legacy name
+    tls_only             = true
+    grants = [
+      {
+        sid           = "SourceAccountWrite"
+        principal_aws = "arn:aws:iam::442557178688:root"
+        actions       = ["s3:PutObject", "s3:PutObjectTagging"]
+        key_suffixes  = ["/*"]
+      },
+    ]
+  }
+
+  # The bucket takes the literal override, NOT the convention id (ck-org-assets).
+  assert {
+    condition     = aws_s3_bucket.this.bucket == "coursekata-assets"
+    error_message = "bucket_name_override must set the literal bucket name"
+  }
+  # Name tag follows the bucket; the slot tags still classify it (Domain=org from the provider).
+  assert {
+    condition     = aws_s3_bucket.this.tags["Name"] == "coursekata-assets" && aws_s3_bucket.this.tags["Domain"] == "org"
+    error_message = "Name tag = the override; slot tags still come from context"
+  }
+  # The TLS-only deny + the cross-account grant target the OVERRIDE bucket's ARN, not the convention id.
+  assert {
+    condition = (
+      strcontains(data.aws_iam_policy_document.this[0].json, "arn:aws:s3:::coursekata-assets") &&
+      !strcontains(data.aws_iam_policy_document.this[0].json, "ck-org-assets") &&
+      strcontains(data.aws_iam_policy_document.this[0].json, "arn:aws:iam::442557178688:root")
+    )
+    error_message = "the policy must target the override ARN and grant the source-account principal"
+  }
+}
