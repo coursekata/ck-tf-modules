@@ -14,17 +14,19 @@ provider "aws" {
 }
 
 provider "context" {
-  property_order  = ["namespace", "tenant", "name", "attributes"]
+  property_order  = ["namespace", "domain", "environment", "surface", "name", "attributes"]
   tags_value_case = "lower"
   properties = {
-    namespace  = { required = true, min_length = 1, validation_regex = "^[a-z0-9-]+$" }
-    tenant     = { validation_regex = "^[a-z0-9-]*$" }
-    name       = { validation_regex = "^[a-z0-9-]*$" }
-    attributes = { validation_regex = "^[a-z0-9-]*$" }
+    namespace   = { required = true, min_length = 1, validation_regex = "^[a-z0-9-]+$" }
+    domain      = { validation_regex = "^[a-z0-9-]*$" }
+    environment = { validation_regex = "^[a-z0-9-]*$" }
+    surface     = { validation_regex = "^[a-z0-9-]*$" }
+    name        = { validation_regex = "^[a-z0-9-]*$" }
+    attributes  = { validation_regex = "^[a-z0-9-]*$" }
   }
   values = {
     namespace = "ck"
-    tenant    = "org" # foundation's tenant -> ck-org-deploy[-plan]
+    domain    = "org" # foundation's domain -> ck-org-deploy[-plan]
   }
 }
 

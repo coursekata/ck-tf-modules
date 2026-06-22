@@ -15,7 +15,7 @@ labeling-side preamble): every root calls both.
 ```hcl
 # one account (the common case)
 module "account_guard" {
-  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/account-guard?ref=v0.3.0"
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/account-guard?ref=v0.4.0"
 
   expected_account_id = "123456789012"
 }
@@ -26,12 +26,12 @@ providers) calls the module **once per account**, passing the matching provider:
 
 ```hcl
 module "guard_security" {
-  source              = "git::https://github.com/coursekata/ck-tf-modules.git//modules/account-guard?ref=v0.3.0"
+  source              = "git::https://github.com/coursekata/ck-tf-modules.git//modules/account-guard?ref=v0.4.0"
   expected_account_id = var.security_account_id
 }
 
 module "guard_archive" {
-  source              = "git::https://github.com/coursekata/ck-tf-modules.git//modules/account-guard?ref=v0.3.0"
+  source              = "git::https://github.com/coursekata/ck-tf-modules.git//modules/account-guard?ref=v0.4.0"
   providers           = { aws = aws.log_archive }
   expected_account_id = var.log_archive_account_id
 }

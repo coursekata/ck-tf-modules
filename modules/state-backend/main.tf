@@ -6,11 +6,14 @@
 
 # Bucket name + tags come from the cloudposse/context PROVIDER, configured by the consuming
 # root with the org policy (required namespace, property order) and this repo's namespace/
-# tenant. The module just adds name = "tfstate" (the bucket is always <...>-tfstate) and pins
+# domain. The module just adds name = "tfstate" (the bucket is always <...>-tfstate) and pins
 # the state-bucket property order here, so a root's pipeline order can't rename the state
-# bucket — only the slot VALUES (namespace/tenant/stage) inherit from the provider.
+# bucket — only the slot VALUES inherit from the provider. The list is the full canonical order;
+# the state bucket is one-per-domain and env-less BY CONVENTION (the bootstrap root simply does
+# not populate environment/surface), so it renders ck-<domain>-tfstate. The slots are listed so a
+# root that ever does set them can't land them in the wrong position.
 data "context_label" "this" {
-  properties = ["namespace", "tenant", "stage", "name"]
+  properties = ["namespace", "domain", "environment", "surface", "name"]
   values     = { name = "tfstate" }
 }
 

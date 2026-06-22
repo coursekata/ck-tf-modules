@@ -6,9 +6,12 @@ TLS-only by default, versioning, SSE-S3. Optional: Object Lock default retention
 expiry, SSE-KMS.
 
 Name + tags come from the **`cloudposse/context` provider** the consuming root configures; the
-bucket is named from the `name` (+ optional `attributes`) slots →
-`ck-<tenant>-<name>[-<attributes>]`. The wrong-account guard is the **root's** job (the shared
-[`account-guard`](../account-guard) module), so this module takes no `expected_account_id`.
+bucket is named in the org canonical order →
+`ck-<domain>[-<environment>][-<surface>]-<name>[-<attributes>]`. A single-env audit bucket
+renders `ck-<domain>-<name>` (e.g. `ck-org-cloudtrail-logs`); a ck-datalake tier bucket
+populates environment + surface to render `ck-datalake-stg-raw-app`. The wrong-account guard is
+the **root's** job (the shared [`account-guard`](../account-guard) module), so this module takes
+no `expected_account_id`.
 
 > Not ck-datalake's tier-bucket (ephemeral: always-KMS, versioning off, no Object Lock). Different
 > trust/retention model — do not conflate.
@@ -24,11 +27,11 @@ Because a grant carries no bucket reference, a grant-producer module (e.g.
 ```hcl
 provider "context" {
   # org labeling schema (typically from the context-schema module)
-  values = { namespace = "ck", tenant = "org" }
+  values = { namespace = "ck", domain = "org" }
 }
 
 module "archive" {
-  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/s3-bucket?ref=v0.3.0"
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/s3-bucket?ref=v0.4.0"
 
   name       = "cloudtrail"
   attributes = "logs" # -> ck-org-cloudtrail-logs
@@ -86,7 +89,7 @@ No modules.
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
-| <a name="input_name"></a> [name](#input\_name) | The context `name` slot for the bucket (e.g. "cloudtrail" -> ck-<tenant>-cloudtrail). | `string` | n/a | yes |
+| <a name="input_name"></a> [name](#input\_name) | The context `name` slot for the bucket (e.g. "cloudtrail" -> ck-<domain>-cloudtrail). | `string` | n/a | yes |
 | <a name="input_attributes"></a> [attributes](#input\_attributes) | Optional context `attributes` slot, appended as a trailing qualifier (e.g. "logs" -> ...-cloudtrail-logs). "" renders no suffix. | `string` | `""` | no |
 | <a name="input_grants"></a> [grants](#input\_grants) | Service-delivery grants merged into the bucket's single policy (alongside tls\_only). Each<br/>grant becomes one Allow statement, and the bucket's OWN ARN is injected here — the resource<br/>is the bucket ARN plus each key\_suffix ("" = the bucket itself, "/AWSLogs/<acct>/*" = an<br/>object path). A grant carries NO bucket reference, so a grant-producer module (e.g.<br/>cloudtrail-delivery-grant) composes without depending on this one. | <pre>list(object({<br/>    sid               = string<br/>    principal_service = string                       # e.g. "cloudtrail.amazonaws.com"<br/>    actions           = list(string)                 # e.g. ["s3:PutObject"]<br/>    key_suffixes      = optional(list(string), [""]) # appended to the bucket ARN; "" = bare bucket<br/>    conditions = optional(list(object({<br/>      test     = string<br/>      variable = string<br/>      values   = list(string)<br/>    })), [])<br/>  }))</pre> | `[]` | no |
 | <a name="input_kms_key_arn"></a> [kms\_key\_arn](#input\_kms\_key\_arn) | KMS key ARN for SSE-KMS. null uses SSE-S3 (AES256), the default until a key-management driver exists. | `string` | `null` | no |

@@ -1,8 +1,9 @@
-# The bucket name renders from the context provider as <namespace>-<tenant>-<name>[-<attributes>].
-# This module is instanced (one call per bucket), so `name` has no default — each caller names
-# its bucket via the slots; the convention is enforced by construction.
+# The bucket name renders from the context provider in the org canonical order:
+# <namespace>-<domain>[-<environment>][-<surface>]-<name>[-<attributes>]. This module is instanced
+# (one call per bucket), so `name` has no default — each caller names its bucket via the slots;
+# the convention is enforced by construction.
 variable "name" {
-  description = "The context `name` slot for the bucket (e.g. \"cloudtrail\" -> ck-<tenant>-cloudtrail)."
+  description = "The context `name` slot for the bucket (e.g. \"cloudtrail\" -> ck-<domain>-cloudtrail)."
   type        = string
 
   validation {

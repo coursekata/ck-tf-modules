@@ -1,4 +1,4 @@
-# Namespace/tenant/stage and tags come from the cloudposse/context PROVIDER (configured by the
+# Namespace/domain and tags come from the cloudposse/context PROVIDER (configured by the
 # consuming root), not from module inputs; `name` is pinned to "tfstate" in main.tf. Only the
 # inputs below are specific to this module.
 

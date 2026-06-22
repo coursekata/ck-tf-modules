@@ -1,5 +1,5 @@
 # Unit tests for the hardened s3-bucket primitive. mock_provider => no AWS calls; the bucket
-# name is rendered from the context provider (configured below as a tenant=org root would), so
+# name is rendered from the context provider (configured below as a domain=org root would), so
 # each run names its bucket via the `name`/`attributes` slots. Assertions target config-derived
 # attributes so the always-on hardening and the optional Object Lock / lifecycle / SSE /
 # ownership behaviour are pinned against regression.
@@ -20,16 +20,17 @@ mock_provider "aws" {
 }
 
 provider "context" {
-  property_order  = ["namespace", "tenant", "stage", "name", "attributes"]
+  property_order  = ["namespace", "domain", "environment", "surface", "name", "attributes"]
   tags_value_case = "lower"
   properties = {
-    namespace  = { required = true, min_length = 1, validation_regex = "^[a-z0-9-]+$" }
-    tenant     = { validation_regex = "^[a-z0-9-]*$" }
-    stage      = { validation_regex = "^[a-z0-9-]*$" }
-    name       = { validation_regex = "^[a-z0-9-]*$" }
-    attributes = { validation_regex = "^[a-z0-9-]*$" }
+    namespace   = { required = true, min_length = 1, validation_regex = "^[a-z0-9-]+$" }
+    domain      = { validation_regex = "^[a-z0-9-]*$" }
+    environment = { validation_regex = "^[a-z0-9-]*$" }
+    surface     = { validation_regex = "^[a-z0-9-]*$" }
+    name        = { validation_regex = "^[a-z0-9-]*$" }
+    attributes  = { validation_regex = "^[a-z0-9-]*$" }
   }
-  values = { namespace = "ck", tenant = "org" }
+  values = { namespace = "ck", domain = "org" }
 }
 
 # --- The CloudTrail archive shape: versioning + GOVERNANCE 3yr lock + AES256 + lifecycle ---
@@ -58,8 +59,8 @@ run "cloudtrail_archive_shape" {
   }
   # Tags are rendered by the module: Name pinned to the full id, plus the slot tags.
   assert {
-    condition     = aws_s3_bucket.this.tags["Name"] == "ck-org-cloudtrail-logs" && aws_s3_bucket.this.tags["Tenant"] == "org" && aws_s3_bucket.this.tags["Attributes"] == "logs"
-    error_message = "tags must pin Name=full id and carry Tenant=org, Attributes=logs"
+    condition     = aws_s3_bucket.this.tags["Name"] == "ck-org-cloudtrail-logs" && aws_s3_bucket.this.tags["Domain"] == "org" && aws_s3_bucket.this.tags["Attributes"] == "logs"
+    error_message = "tags must pin Name=full id and carry Domain=org, Attributes=logs"
   }
   assert {
     condition     = aws_s3_bucket_public_access_block.this.block_public_acls && aws_s3_bucket_public_access_block.this.block_public_policy && aws_s3_bucket_public_access_block.this.ignore_public_acls && aws_s3_bucket_public_access_block.this.restrict_public_buckets

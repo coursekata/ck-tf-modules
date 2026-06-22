@@ -12,22 +12,24 @@ provider "aws" {
   skip_metadata_api_check     = true
 }
 
-# The cloudposse/context provider supplies namespace/tenant/tags (the consuming root configures
-# it in real life); property_order + required namespace mirror the org policy.
+# The cloudposse/context provider supplies namespace/domain/tags (the consuming root configures
+# it in real life); property_order + required namespace mirror the org policy. The bootstrap root
+# leaves environment/surface empty, so the state bucket renders env-less: ck-<domain>-tfstate.
 provider "context" {
-  property_order  = ["namespace", "tenant", "stage", "name"]
+  property_order  = ["namespace", "domain", "environment", "surface", "name"]
   tags_value_case = "lower" # org invariant: lowercase tag values (Title-case keys are the default)
   properties = {
     # validation_regex enforces lowercase — the provider does NOT auto-lowercase the id, so this
     # is the guard against an invalid (uppercase) bucket name.
-    namespace = { required = true, min_length = 1, validation_regex = "^[a-z0-9-]+$" }
-    tenant    = { validation_regex = "^[a-z0-9-]*$" }
-    stage     = { validation_regex = "^[a-z0-9-]*$" }
-    name      = { validation_regex = "^[a-z0-9-]*$" }
+    namespace   = { required = true, min_length = 1, validation_regex = "^[a-z0-9-]+$" }
+    domain      = { validation_regex = "^[a-z0-9-]*$" }
+    environment = { validation_regex = "^[a-z0-9-]*$" }
+    surface     = { validation_regex = "^[a-z0-9-]*$" }
+    name        = { validation_regex = "^[a-z0-9-]*$" }
   }
   values = {
     namespace = "ck"
-    tenant    = "tooling"
+    domain    = "tooling"
   }
 }
 
@@ -36,7 +38,7 @@ run "bucket_name_follows_label_convention" {
 
   assert {
     condition     = aws_s3_bucket.tfstate.bucket == "ck-tooling-tfstate"
-    error_message = "bucket name must be <namespace>-<tenant>-tfstate"
+    error_message = "bucket name must be <namespace>-<domain>-tfstate"
   }
   # Name tag is the full id (not the bare "tfstate" name) — matches the prior null-label
   # convention, so switching a live bucket to the provider is a no-op.
@@ -44,14 +46,14 @@ run "bucket_name_follows_label_convention" {
     condition     = aws_s3_bucket.tfstate.tags["Name"] == "ck-tooling-tfstate"
     error_message = "Name tag must be the full bucket id, not the bare name value"
   }
-  # Lock the tag-key contract the ck-tooling no-op depends on: Namespace/Tenant present + exact.
+  # Lock the tag-key contract the ck-tooling no-op depends on: Namespace/Domain present + exact.
   assert {
     condition     = aws_s3_bucket.tfstate.tags["Namespace"] == "ck"
     error_message = "Namespace tag must be present and equal ck"
   }
   assert {
-    condition     = aws_s3_bucket.tfstate.tags["Tenant"] == "tooling"
-    error_message = "Tenant tag must be present and equal tooling"
+    condition     = aws_s3_bucket.tfstate.tags["Domain"] == "tooling"
+    error_message = "Domain tag must be present and equal tooling"
   }
 }
 
