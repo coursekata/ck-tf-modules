@@ -122,6 +122,8 @@ variable "environment" {
   type        = string
   default     = ""
 
+  # Re-validated here even though the context provider also guards the slot, so a bad value fails
+  # with a module-owned message at the call site instead of a provider-internal one (surface mirrors).
   validation {
     condition     = can(regex("^[a-z0-9-]*$", var.environment))
     error_message = "environment must be lowercase letters, digits, and hyphens only (or empty)."

@@ -1,10 +1,11 @@
-# A hardened, durable S3 bucket primitive for org security/audit buckets (CloudTrail archive,
-# Config delivery, …). Always-on baseline: public access fully blocked, TLS-only by default,
-# versioning, SSE. Optional: Object Lock default retention, lifecycle expiry, SSE-KMS, and
-# service-delivery grants merged into the bucket policy (see var.grants).
-#
-# This is NOT ck-datalake's tier-bucket (that archetype is ephemeral: always-KMS, versioning
-# off, no Object Lock). Different trust/retention model — do not conflate.
+# A hardened S3 bucket primitive serving two shapes from one parameterized module: org
+# security/audit buckets (CloudTrail archive, Config delivery — versioning + optional Object Lock,
+# durable) AND ck-datalake ephemeral data-tier buckets (versioning off, prefix-scoped expiry, an
+# optional dedicated CMK). Keeping them one module means the org's bucket-hardening invariants live
+# in a single place instead of drifting between two near-identical copies. Always-on baseline:
+# public access fully blocked, TLS-only by default, versioning, SSE. Optional: Object Lock default
+# retention, lifecycle expiry, SSE-KMS (a passed kms_key_arn or a created CMK), and grants — to
+# service OR AWS principals — merged into the bucket policy (see var.grants).
 
 # Partition (aws / aws-us-gov / aws-cn) for building the bucket ARN; logical, no API call.
 data "aws_partition" "current" {}
@@ -34,8 +35,8 @@ locals {
 
   object_lock_enabled = var.object_lock != null
 
-  # SSE-KMS either with a created CMK (create_kms) or a passed-in key (kms_key_arn); the two are
-  # mutually exclusive (validated). local.kms_key_arn is the effective key, null for SSE-S3.
+  # create_kms and kms_key_arn are the two SSE-KMS sources, mutually exclusive (validated). Resolve
+  # the effective key once here; a created key's arn comes via the splat (null until create_kms is on).
   use_kms     = var.create_kms || var.kms_key_arn != null
   kms_key_arn = var.create_kms ? one(aws_kms_key.this[*].arn) : var.kms_key_arn
 
@@ -54,8 +55,7 @@ locals {
 }
 
 # Server access logging is intentionally omitted — data-plane auditing is expected to come from
-# a separate CloudTrail/data-events trail, not per-bucket logs. SSE-S3 is the default; pass
-# kms_key_arn for SSE-KMS.
+# a separate CloudTrail/data-events trail, not per-bucket logs.
 # trivy:ignore:AVD-AWS-0089
 # trivy:ignore:AVD-AWS-0132
 resource "aws_s3_bucket" "this" {
@@ -102,10 +102,10 @@ resource "aws_s3_bucket_versioning" "this" {
   }
 }
 
-# Optional dedicated CMK (create_kms). Annual rotation, 30-day deletion window. The key POLICY is
-# intentionally NOT set here — the bucket gets AWS's default root key policy, and the caller may
-# attach an aws_kms_key_policy (via the kms_key_id/kms_key_arn outputs) to grant concrete principal
-# ARNs (e.g. a data-export role), keeping this module a pure storage primitive.
+# Optional dedicated CMK (create_kms). The key POLICY is intentionally NOT set here — the bucket
+# gets AWS's default root key policy, and the caller may attach an aws_kms_key_policy (via the
+# kms_key_id/kms_key_arn outputs) to grant concrete principal ARNs (e.g. a data-export role),
+# keeping this module a pure storage primitive rather than baking principals into a naming convention.
 resource "aws_kms_key" "this" {
   count = var.create_kms ? 1 : 0
 
@@ -119,7 +119,7 @@ resource "aws_kms_alias" "this" {
   count = var.create_kms ? 1 : 0
 
   name          = "alias/${data.context_label.this.rendered}"
-  target_key_id = aws_kms_key.this[0].id
+  target_key_id = one(aws_kms_key.this[*].id)
 }
 
 # trivy:ignore:AVD-AWS-0132
@@ -224,7 +224,9 @@ data "aws_iam_policy_document" "this" {
       actions   = statement.value.actions
       resources = [for ks in statement.value.key_suffixes : ks == "" ? local.bucket_arn : "${local.bucket_arn}${ks}"]
 
-      # Exactly one principal per grant (validated): an AWS principal ARN, else a Service principal.
+      # The grant's XOR validation guarantees exactly one principal is set, which is what makes
+      # coalesce safe here — it skips the null and lands on the one present; the type then matches
+      # whichever it was (an AWS principal ARN vs. a Service principal).
       principals {
         type        = statement.value.principal_aws != null ? "AWS" : "Service"
         identifiers = [coalesce(statement.value.principal_aws, statement.value.principal_service)]

@@ -19,6 +19,6 @@ output "kms_key_arn" {
 }
 
 output "kms_key_id" {
-  description = "Key id of the bucket's created CMK (create_kms), else null. Use as the aws_kms_key_policy key_id."
+  description = "The created CMK's key id (null when create_kms is false) — pass as aws_kms_key_policy.key_id to attach the key's policy."
   value       = one(aws_kms_key.this[*].key_id)
 }

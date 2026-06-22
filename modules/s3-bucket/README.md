@@ -120,5 +120,5 @@ No modules.
 | <a name="output_bucket_domain_name"></a> [bucket\_domain\_name](#output\_bucket\_domain\_name) | Bucket regional domain name. |
 | <a name="output_id"></a> [id](#output\_id) | Bucket name / id. |
 | <a name="output_kms_key_arn"></a> [kms\_key\_arn](#output\_kms\_key\_arn) | ARN of the bucket's created CMK (create\_kms), else null. Wire into an aws\_kms\_key\_policy to grant concrete principals, or reference for SSE-KMS-pinned writes. |
-| <a name="output_kms_key_id"></a> [kms\_key\_id](#output\_kms\_key\_id) | Key id of the bucket's created CMK (create\_kms), else null. Use as the aws\_kms\_key\_policy key\_id. |
+| <a name="output_kms_key_id"></a> [kms\_key\_id](#output\_kms\_key\_id) | The created CMK's key id (null when create\_kms is false) — pass as aws\_kms\_key\_policy.key\_id to attach the key's policy. |
 <!-- END_TF_DOCS -->
