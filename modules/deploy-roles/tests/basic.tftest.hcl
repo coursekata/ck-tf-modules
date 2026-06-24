@@ -42,8 +42,8 @@ run "names_render_from_context" {
   command = plan
 
   assert {
-    condition     = aws_iam_role.apply.name == "ck-org-deploy"
-    error_message = "apply role must render as ck-org-deploy"
+    condition     = aws_iam_role.apply.name == "ck-org-deploy-apply"
+    error_message = "apply role must render as ck-org-deploy-apply"
   }
   assert {
     condition     = aws_iam_role.plan[0].name == "ck-org-deploy-plan"
@@ -55,7 +55,7 @@ run "names_render_from_context" {
     error_message = "apply and plan role names must never be equal"
   }
   assert {
-    condition     = aws_iam_role.apply.tags["Name"] == "ck-org-deploy"
+    condition     = aws_iam_role.apply.tags["Name"] == "ck-org-deploy-apply"
     error_message = "Name tag must pin the full role id"
   }
 }
@@ -102,13 +102,13 @@ run "apply_only_spoke_omits_plan_role" {
     error_message = "an apply-only spoke (hub_plan_role_arn = null) must create NO plan role"
   }
   assert {
-    condition     = aws_iam_role.apply.name == "ck-org-deploy"
+    condition     = aws_iam_role.apply.name == "ck-org-deploy-apply"
     error_message = "the apply role is still created for an apply-only spoke"
   }
 }
 
-# attributes is a normal slot on deploy-roles; it renders into the role names.
-run "caller_attributes_render_into_the_names" {
+# attributes is still a normal slot on deploy-roles; the role-type suffix is appended after it.
+run "caller_attributes_render_before_the_role_suffix" {
   command = plan
 
   variables {
@@ -116,8 +116,8 @@ run "caller_attributes_render_into_the_names" {
   }
 
   assert {
-    condition     = aws_iam_role.apply.name == "ck-org-deploy-x"
-    error_message = "caller attributes render as a slot on the apply role name"
+    condition     = aws_iam_role.apply.name == "ck-org-deploy-x-apply"
+    error_message = "caller attributes render as a slot (ck-org-deploy-x), with -apply appended"
   }
 }
 

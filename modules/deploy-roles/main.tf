@@ -7,11 +7,13 @@
 #
 # The standardized, security-critical part is the TRUST: each role trusts EXACTLY one hub role
 # ARN (no wildcard) for sts:AssumeRole + sts:TagSession. The spoke supplies its own permissions.
-# Names come from the shared context render: the apply role uses the rendered id directly
-# (ck-<domain>-<name>); the plan role appends -plan.
+# The two role names append the role type to the shared context render, so they are unique by
+# construction: apply -> ck-<domain>-<name>-apply, plan -> ck-<domain>-<name>-plan. The suffix is a
+# literal (not a context slot) — the role-type distinction isn't worth a tag; add one manually if
+# ever needed.
 locals {
   create_plan = var.hub_plan_role_arn != null
-  apply_name  = data.context_label.this.rendered
+  apply_name  = "${data.context_label.this.rendered}-apply"
   plan_name   = "${data.context_label.this.rendered}-plan"
 }
 

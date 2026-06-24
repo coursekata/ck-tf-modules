@@ -43,8 +43,8 @@ run "surface_renders_into_the_role_names" {
   command = plan
 
   assert {
-    condition     = aws_iam_role.apply.name == "ck-app-api-deploy"
-    error_message = "apply role must render ck-app-api-deploy (surface must NOT be dropped)"
+    condition     = aws_iam_role.apply.name == "ck-app-api-deploy-apply"
+    error_message = "apply role must render ck-app-api-deploy-apply (surface must NOT be dropped)"
   }
   assert {
     condition     = aws_iam_role.plan[0].name == "ck-app-api-deploy-plan"
