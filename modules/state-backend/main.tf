@@ -1,29 +1,9 @@
-# Reusable state-backend: an S3 bucket hardened to back an OpenTofu root's state via the
-# 1.11+ native S3 lockfile (`use_lockfile = true` in the consumer's backend.tf — no
-# DynamoDB table). The consuming root supplies the provider (and its default_tags); this
-# module configures none. (The wrong-account guard is the root's job — every root calls the shared
-# account-guard module as its preamble — so this module no longer takes an expected_account_id.)
+# Reusable state-backend: an S3 bucket hardened to back an OpenTofu root's state via the 1.11+
+# native S3 lockfile (no DynamoDB). The consuming root supplies the provider; the wrong-account
+# guard is the root's job (the shared account-guard module). Name + tags come from context.tf —
+# the caller passes name = "tfstate" (the bucket is always ck-<domain>-tfstate).
 
-# Bucket name + tags come from the cloudposse/context PROVIDER, configured by the consuming
-# root with the org policy (required namespace, property order) and this repo's namespace/
-# domain. The module just adds name = "tfstate" (the bucket is always <...>-tfstate) and pins
-# the state-bucket property order here, so a root's pipeline order can't rename the state
-# bucket — only the slot VALUES inherit from the provider. The list is the full canonical order;
-# the state bucket is one-per-domain and env-less BY CONVENTION (the bootstrap root simply does
-# not populate environment/surface), so it renders ck-<domain>-tfstate. The slots are listed so a
-# root that ever does set them can't land them in the wrong position.
-data "context_label" "this" {
-  properties = ["namespace", "domain", "environment", "surface", "name"]
-  values     = { name = "tfstate" }
-}
-
-data "context_tags" "this" {
-  values = { name = "tfstate" }
-}
-
-# Construct the bucket ARN from its (plan-known) name rather than referencing
-# aws_s3_bucket.tfstate.arn, so the TLS policy document resolves fully at plan time (no
-# apply-time deferral) and stays unit-testable. S3 ARNs carry no account/region segment.
+# ARN from the (plan-known) name, not aws_s3_bucket.tfstate.arn, so the TLS policy resolves at plan.
 data "aws_partition" "current" {}
 
 locals {

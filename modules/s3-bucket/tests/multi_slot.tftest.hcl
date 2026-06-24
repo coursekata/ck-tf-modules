@@ -1,8 +1,7 @@
-# Proves the v0.4.0 slot-drop fix: when the consuming root populates `environment` and `surface`
-# (the ck-datalake tier-bucket case), the bucket renders the full canonical id
-# ck-<domain>-<environment>-<surface>-<name>[-<attributes>] — they are NOT dropped. Pre-v0.4.0
-# the module's property list omitted these slots, so a multi-env consumer silently lost them.
-# Single-env coverage (slots empty -> rendered away) lives in basic.tftest.hcl.
+# The ck-datalake tier case: the root provider sets environment + surface as base values, and a
+# bucket reconciles them per the context contract —
+#   unset/null -> inherit the base   |   a value -> override   |   "" -> suppress the base here.
+# Single-env coverage (no base env/surface) lives in basic.tftest.hcl.
 
 mock_provider "aws" {
   mock_data "aws_iam_policy_document" {
@@ -27,30 +26,29 @@ provider "context" {
   values = { namespace = "ck", domain = "datalake", environment = "stg", surface = "raw" }
 }
 
-run "environment_and_surface_render_into_the_id" {
+# Unset slots (null) inherit the base — the bucket renders the full canonical id.
+run "unset_slots_inherit_the_base" {
   command = plan
 
   variables {
     name = "app" # the source system; raw tier of the app pipeline
   }
 
-  # The whole point of v0.4.0: the env + tier are in the name, in canonical order.
   assert {
     condition     = aws_s3_bucket.this.bucket == "ck-datalake-stg-raw-app"
-    error_message = "bucket must render ck-datalake-stg-raw-app (environment + surface must NOT be dropped)"
+    error_message = "unset environment/surface must inherit the base -> ck-datalake-stg-raw-app"
   }
-  # And they surface as their own tags.
   assert {
     condition = (
       aws_s3_bucket.this.tags["Domain"] == "datalake" &&
       aws_s3_bucket.this.tags["Environment"] == "stg" &&
       aws_s3_bucket.this.tags["Surface"] == "raw"
     )
-    error_message = "Domain/Environment/Surface tags must carry the populated slot values"
+    error_message = "Domain/Environment/Surface tags must carry the inherited base values"
   }
 }
 
-run "attributes_still_trail_the_full_id" {
+run "attributes_trail_the_full_id" {
   command = plan
 
   variables {
@@ -58,9 +56,42 @@ run "attributes_still_trail_the_full_id" {
     attributes = "writer"
   }
 
-  # attributes remain LAST in the canonical order, after the env/surface/name segment.
   assert {
     condition     = aws_s3_bucket.this.bucket == "ck-datalake-stg-raw-app-writer"
     error_message = "attributes must trail the full id: ck-datalake-stg-raw-app-writer"
+  }
+}
+
+# Passing "" suppresses a base slot for this bucket (environment drops; surface still inherits).
+run "explicit_empty_suppresses_a_base_slot" {
+  command = plan
+
+  variables {
+    name        = "app"
+    environment = ""
+  }
+
+  assert {
+    condition     = aws_s3_bucket.this.bucket == "ck-datalake-raw-app"
+    error_message = "environment=\"\" must suppress the base stg -> ck-datalake-raw-app"
+  }
+  assert {
+    condition     = !contains(keys(aws_s3_bucket.this.tags), "Environment") && aws_s3_bucket.this.tags["Surface"] == "raw"
+    error_message = "suppressed environment must drop its tag while surface still inherits"
+  }
+}
+
+# Passing null is identical to omitting — it inherits, and never reaches the provider (no crash).
+run "explicit_null_inherits_like_omitting" {
+  command = plan
+
+  variables {
+    name        = "app"
+    environment = null
+  }
+
+  assert {
+    condition     = aws_s3_bucket.this.bucket == "ck-datalake-stg-raw-app"
+    error_message = "environment=null must inherit the base, same as omitting it"
   }
 }

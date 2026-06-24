@@ -33,6 +33,11 @@ provider "context" {
   }
 }
 
+# The bootstrap root names the state bucket; the module no longer hardcodes "tfstate".
+variables {
+  name = "tfstate"
+}
+
 run "bucket_name_follows_label_convention" {
   command = plan
 

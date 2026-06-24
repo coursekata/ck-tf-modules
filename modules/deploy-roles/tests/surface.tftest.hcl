@@ -32,6 +32,7 @@ provider "context" {
 }
 
 variables {
+  name               = "deploy"
   hub_apply_role_arn = "arn:aws:iam::883385860947:role/ck-tooling-ci-app-api-apply"
   hub_plan_role_arn  = "arn:aws:iam::883385860947:role/ck-tooling-ci-app-api-plan"
   apply_policy_arns  = ["arn:aws:iam::aws:policy/AdministratorAccess"]

@@ -85,10 +85,8 @@ No modules.
 | [aws_iam_role_policy_attachment.plan_managed](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy_attachment) | resource |
 | [aws_iam_policy_document.apply_trust](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.plan_trust](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
-| [context_label.apply](https://registry.terraform.io/providers/cloudposse/context/latest/docs/data-sources/label) | data source |
-| [context_label.plan](https://registry.terraform.io/providers/cloudposse/context/latest/docs/data-sources/label) | data source |
-| [context_tags.apply](https://registry.terraform.io/providers/cloudposse/context/latest/docs/data-sources/tags) | data source |
-| [context_tags.plan](https://registry.terraform.io/providers/cloudposse/context/latest/docs/data-sources/tags) | data source |
+| [context_label.this](https://registry.terraform.io/providers/cloudposse/context/latest/docs/data-sources/label) | data source |
+| [context_tags.this](https://registry.terraform.io/providers/cloudposse/context/latest/docs/data-sources/tags) | data source |
 
 ## Inputs
 
@@ -97,10 +95,13 @@ No modules.
 | <a name="input_hub_apply_role_arn"></a> [hub\_apply\_role\_arn](#input\_hub\_apply\_role\_arn) | ARN of the hub CI APPLY role (in the tooling account) permitted to sts:AssumeRole the apply (RW) deploy role. This is the gated write path: the hub apply role is itself assumable only from the spoke's protected GitHub Environment. | `string` | n/a | yes |
 | <a name="input_apply_inline_policy"></a> [apply\_inline\_policy](#input\_apply\_inline\_policy) | Optional inline IAM policy JSON for the apply (RW) deploy role (e.g. from a data.aws\_iam\_policy\_document). | `string` | `null` | no |
 | <a name="input_apply_policy_arns"></a> [apply\_policy\_arns](#input\_apply\_policy\_arns) | Managed IAM policy ARNs attached to the apply (RW) deploy role — the spoke's deploy permissions. Use these or apply\_inline\_policy (at least one is required). | `list(string)` | `[]` | no |
+| <a name="input_attributes"></a> [attributes](#input\_attributes) | Optional `attributes` slot. null/unset inherits the provider base; "" suppresses it here; a value overrides. | `string` | `null` | no |
+| <a name="input_environment"></a> [environment](#input\_environment) | Optional `environment` slot. null/unset inherits the provider base; "" suppresses it here; a value overrides. | `string` | `null` | no |
 | <a name="input_hub_plan_role_arn"></a> [hub\_plan\_role\_arn](#input\_hub\_plan\_role\_arn) | ARN of the hub CI PLAN role permitted to sts:AssumeRole the plan (RO) deploy role. Leave null for an apply-only spoke (no PR plan role is created). | `string` | `null` | no |
-| <a name="input_name"></a> [name](#input\_name) | The context `name` slot for the roles. Renders as <namespace>-<domain>[-<surface>]-<name> (apply) and the same plus -plan (plan), e.g. ck-org-deploy / ck-org-deploy-plan, or ck-app-api-deploy for a per-surface spoke. | `string` | `"deploy"` | no |
+| <a name="input_name"></a> [name](#input\_name) | The `name` slot for the roles. Defaults to "deploy" (ck-<domain>-deploy-apply / -plan); override per spoke. | `string` | `"deploy"` | no |
 | <a name="input_plan_inline_policy"></a> [plan\_inline\_policy](#input\_plan\_inline\_policy) | Optional inline IAM policy JSON for the plan (RO) deploy role. Only used when hub\_plan\_role\_arn is set. | `string` | `null` | no |
 | <a name="input_plan_policy_arns"></a> [plan\_policy\_arns](#input\_plan\_policy\_arns) | Managed IAM policy ARNs attached to the plan (RO) deploy role. Only used when hub\_plan\_role\_arn is set. | `list(string)` | `[]` | no |
+| <a name="input_surface"></a> [surface](#input\_surface) | Optional `surface` slot. null/unset inherits the provider base; "" suppresses it here; a value overrides. | `string` | `null` | no |
 
 ## Outputs
 
