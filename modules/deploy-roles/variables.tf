@@ -1,6 +1,16 @@
-# Namespace/domain and tags come from the cloudposse/context PROVIDER (configured by the
-# consuming root, which must declare the `attributes` property so the plan role renders
-# <...>-plan). Only the inputs below are specific to this module.
+# Namespace/domain and tags come from the cloudposse/context PROVIDER (configured by the consuming
+# root). `name` defaults to "deploy"; the apply/plan role names append the role type as a suffix.
+
+variable "name" {
+  description = "The `name` slot for the roles. Defaults to \"deploy\" (ck-<domain>-deploy-apply / -plan); override per spoke."
+  type        = string
+  default     = "deploy"
+
+  validation {
+    condition     = can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", var.name))
+    error_message = "name must be lowercase alphanumerics with internal hyphens only (no leading/trailing hyphen)."
+  }
+}
 
 variable "hub_apply_role_arn" {
   description = "ARN of the hub CI APPLY role (in the tooling account) permitted to sts:AssumeRole the apply (RW) deploy role. This is the gated write path: the hub apply role is itself assumable only from the spoke's protected GitHub Environment."
@@ -45,15 +55,4 @@ variable "plan_inline_policy" {
   description = "Optional inline IAM policy JSON for the plan (RO) deploy role. Only used when hub_plan_role_arn is set."
   type        = string
   default     = null
-}
-
-variable "name" {
-  description = "The context `name` slot for the roles. Renders as <namespace>-<domain>[-<surface>]-<name> (apply) and the same plus -plan (plan), e.g. ck-org-deploy / ck-org-deploy-plan, or ck-app-api-deploy for a per-surface spoke."
-  type        = string
-  default     = "deploy"
-
-  validation {
-    condition     = can(regex("^[a-z0-9-]+$", var.name))
-    error_message = "name must be lowercase letters, digits, and hyphens only (the context provider does not auto-lowercase the rendered role name)."
-  }
 }

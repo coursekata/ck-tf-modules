@@ -12,6 +12,7 @@ quality bar, not the delivery gate.
 | [`account-guard`](modules/account-guard) | Root-preamble guard: asserts the running credential resolves to the expected account and fails the plan otherwise. Every root calls it once per provider. |
 | [`context-schema`](modules/context-schema) | Outputs-only module emitting the org labeling schema (property order, slots, tag-case) that each root's `cloudposse/context` provider is configured from. |
 | [`deploy-roles`](modules/deploy-roles) | Spoke plan (RO) + apply (RW) IAM roles for the OIDC hub-spoke delivery model — standardized trust, caller-supplied permissions. |
+| [`log-group`](modules/log-group) | CloudWatch Logs log-group primitive — context-rendered name/tags, an optional AWS-mandated source prefix, and a caller-chosen retention. The logging sibling of `s3-bucket`. |
 | [`s3-bucket`](modules/s3-bucket) | Hardened, durable S3 bucket archetype for security/audit buckets, with a generic ARN-free `grants` seam for service-delivery policies. |
 | [`state-backend`](modules/state-backend) | Hardened S3 bucket backing an OpenTofu root's state via the native S3 lockfile (no DynamoDB). |
 

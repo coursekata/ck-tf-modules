@@ -1,41 +1,15 @@
-# A hardened S3 bucket primitive serving two shapes from one parameterized module: org
-# security/audit buckets (CloudTrail archive, Config delivery — versioning + optional Object Lock,
-# durable) AND ck-datalake ephemeral data-tier buckets (versioning off, prefix-scoped expiry, an
-# optional dedicated CMK). Keeping them one module means the org's bucket-hardening invariants live
-# in a single place instead of drifting between two near-identical copies. Always-on baseline:
-# public access fully blocked, TLS-only by default, versioning, SSE. Optional: Object Lock default
-# retention, lifecycle expiry, SSE-KMS (a passed kms_key_arn or a created CMK), and grants — to
-# service OR AWS principals — merged into the bucket policy (see var.grants).
+# Hardened S3 bucket archetype for two shapes: durable org security/audit buckets (versioning,
+# optional Object Lock) and ephemeral ck-datalake data-tier buckets (prefix-scoped expiry, optional
+# CMK). One module so the hardening invariants don't drift between two near-copies. Always-on
+# baseline: public access blocked, TLS-only, versioning, SSE; everything else is opt-in.
+#
+# Name + tags come from context.tf (data.context_label.this / data.context_tags.this).
 
-# Partition (aws / aws-us-gov / aws-cn) for building the bucket ARN; logical, no API call.
 data "aws_partition" "current" {}
 
-# Name + tags from the context provider, in the org canonical order. environment + surface render
-# only when the consuming root populates them (e.g. ck-datalake tier buckets:
-# ck-datalake-stg-raw-app); they drop out for single-env audit buckets (ck-org-cloudtrail-logs).
-# `attributes` is omitted from the rendered id when empty.
-data "context_label" "this" {
-  properties = var.attributes == "" ? ["namespace", "domain", "environment", "surface", "name"] : ["namespace", "domain", "environment", "surface", "name", "attributes"]
-  values     = local.label_values
-}
-
-data "context_tags" "this" {
-  values = local.label_values
-}
-
 locals {
-  # Slot values shared by the label (name) and the tags. environment/surface are call-time
-  # overrides included ONLY when set, so a single-env consumer (foundation/tooling) leaves them to
-  # the provider (empty) and stays byte-identical, while a datalake tier passes them per bucket.
-  label_values = merge(
-    { name = var.name, attributes = var.attributes },
-    var.environment != "" ? { environment = var.environment } : {},
-    var.surface != "" ? { surface = var.surface } : {},
-  )
-
-  # The bucket's literal name: the convention id by default, or the override when adopting a
-  # pre-existing externally-named bucket. The context label/tags are still computed from the slots
-  # (so the bucket keeps its Domain/Environment/… classification) — only the id + Name tag differ.
+  # Convention id, or an override when adopting a pre-existing externally-named bucket. The label and
+  # tags still derive from the slots, so an overridden bucket keeps its classification.
   bucket_name = var.bucket_name_override != "" ? var.bucket_name_override : data.context_label.this.rendered
 
   object_lock_enabled = var.object_lock != null

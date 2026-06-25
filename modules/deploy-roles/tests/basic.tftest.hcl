@@ -31,6 +31,7 @@ provider "context" {
 }
 
 variables {
+  name               = "deploy"
   hub_apply_role_arn = "arn:aws:iam::883385860947:role/ck-tooling-ci-foundation-apply"
   hub_plan_role_arn  = "arn:aws:iam::883385860947:role/ck-tooling-ci-foundation-plan"
   apply_policy_arns  = ["arn:aws:iam::aws:policy/AdministratorAccess"] # placeholder perms for the test
@@ -41,15 +42,20 @@ run "names_render_from_context" {
   command = plan
 
   assert {
-    condition     = aws_iam_role.apply.name == "ck-org-deploy"
-    error_message = "apply role must render as ck-org-deploy"
+    condition     = aws_iam_role.apply.name == "ck-org-deploy-apply"
+    error_message = "apply role must render as ck-org-deploy-apply"
   }
   assert {
     condition     = aws_iam_role.plan[0].name == "ck-org-deploy-plan"
     error_message = "plan role must render as ck-org-deploy-plan"
   }
+  # The two names are distinct by construction (explicit apply/plan discriminator) — never collide.
   assert {
-    condition     = aws_iam_role.apply.tags["Name"] == "ck-org-deploy"
+    condition     = aws_iam_role.apply.name != aws_iam_role.plan[0].name
+    error_message = "apply and plan role names must never be equal"
+  }
+  assert {
+    condition     = aws_iam_role.apply.tags["Name"] == "ck-org-deploy-apply"
     error_message = "Name tag must pin the full role id"
   }
 }
@@ -96,8 +102,22 @@ run "apply_only_spoke_omits_plan_role" {
     error_message = "an apply-only spoke (hub_plan_role_arn = null) must create NO plan role"
   }
   assert {
-    condition     = aws_iam_role.apply.name == "ck-org-deploy"
+    condition     = aws_iam_role.apply.name == "ck-org-deploy-apply"
     error_message = "the apply role is still created for an apply-only spoke"
+  }
+}
+
+# attributes is still a normal slot on deploy-roles; the role-type suffix is appended after it.
+run "caller_attributes_render_before_the_role_suffix" {
+  command = plan
+
+  variables {
+    attributes = "x"
+  }
+
+  assert {
+    condition     = aws_iam_role.apply.name == "ck-org-deploy-x-apply"
+    error_message = "caller attributes render as a slot (ck-org-deploy-x), with -apply appended"
   }
 }
 

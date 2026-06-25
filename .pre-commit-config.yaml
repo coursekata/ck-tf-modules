@@ -40,3 +40,11 @@ repos:
         files: \.(tf|tftest\.hcl)$
         exclude: (^|/)\.terraform/
         require_serial: true
+
+      - id: context-shared
+        name: context.tf is byte-identical across modules
+        entry: scripts/check-context-shared.sh
+        language: script
+        files: \.tf$
+        pass_filenames: false
+        require_serial: true

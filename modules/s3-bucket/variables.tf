@@ -1,25 +1,11 @@
-# The bucket name renders from the context provider in the org canonical order:
-# <namespace>-<domain>[-<environment>][-<surface>]-<name>[-<attributes>]. This module is instanced
-# (one call per bucket), so `name` has no default — each caller names its bucket via the slots;
-# the convention is enforced by construction.
 variable "name" {
-  description = "The context `name` slot for the bucket (e.g. \"cloudtrail\" -> ck-<domain>-cloudtrail)."
+  description = "The `name` slot. Defaults to the module's opinionated name; override per bucket."
   type        = string
+  default     = "bucket"
 
   validation {
-    condition     = can(regex("^[a-z0-9-]+$", var.name))
-    error_message = "name must be lowercase letters, digits, and hyphens only."
-  }
-}
-
-variable "attributes" {
-  description = "Optional context `attributes` slot, appended as a trailing qualifier (e.g. \"logs\" -> ...-cloudtrail-logs). \"\" renders no suffix."
-  type        = string
-  default     = ""
-
-  validation {
-    condition     = can(regex("^[a-z0-9-]*$", var.attributes))
-    error_message = "attributes must be lowercase letters, digits, and hyphens only (or empty)."
+    condition     = can(regex("^[a-z0-9]([a-z0-9-]*[a-z0-9])?$", var.name))
+    error_message = "name must be lowercase alphanumerics with internal hyphens only (no leading/trailing hyphen)."
   }
 }
 
@@ -132,30 +118,6 @@ variable "require_sse_kms" {
   validation {
     condition     = !var.require_sse_kms || var.create_kms || var.kms_key_arn != null
     error_message = "require_sse_kms needs a CMK — set create_kms or kms_key_arn."
-  }
-}
-
-variable "environment" {
-  description = "Optional call-time `environment` slot override (e.g. \"stg\"/\"prd\"). Renders ck-<domain>-<environment>-…; \"\" leaves the provider's value (empty for single-env repos). Lets one provider config name buckets across environments."
-  type        = string
-  default     = ""
-
-  # Re-validated here even though the context provider also guards the slot, so a bad value fails
-  # with a module-owned message at the call site instead of a provider-internal one (surface mirrors).
-  validation {
-    condition     = can(regex("^[a-z0-9-]*$", var.environment))
-    error_message = "environment must be lowercase letters, digits, and hyphens only (or empty)."
-  }
-}
-
-variable "surface" {
-  description = "Optional call-time `surface` slot override (e.g. a datalake tier \"raw\"/\"staging\"/\"analytical\"). Renders …-<surface>-<name>; \"\" leaves the provider's value. Lets one provider config name buckets across surfaces/tiers."
-  type        = string
-  default     = ""
-
-  validation {
-    condition     = can(regex("^[a-z0-9-]*$", var.surface))
-    error_message = "surface must be lowercase letters, digits, and hyphens only (or empty)."
   }
 }
 

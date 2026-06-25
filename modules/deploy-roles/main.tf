@@ -7,37 +7,14 @@
 #
 # The standardized, security-critical part is the TRUST: each role trusts EXACTLY one hub role
 # ARN (no wildcard) for sts:AssumeRole + sts:TagSession. The spoke supplies its own permissions.
-# Names/tags come from the cloudposse/context provider configured by the consuming root — which
-# must declare the `attributes` property so the plan role can render <...>-plan.
-
+# The two role names append the role type to the shared context render, so they are unique by
+# construction: apply -> ck-<domain>-<name>-apply, plan -> ck-<domain>-<name>-plan. The suffix is a
+# literal (not a context slot) — the role-type distinction isn't worth a tag; add one manually if
+# ever needed.
 locals {
   create_plan = var.hub_plan_role_arn != null
-}
-
-# Role names follow the org canonical order: apply = <namespace>-<domain>[-<env>][-<surface>]-<name>
-# (e.g. ck-org-deploy, or ck-app-api-deploy for a per-surface spoke); plan = <...>-<name>-plan.
-# environment/surface render only when the consuming root populates them; they drop out for a
-# single-surface domain spoke like foundation (ck-org-deploy).
-data "context_label" "apply" {
-  properties = ["namespace", "domain", "environment", "surface", "name"]
-  values     = { name = var.name }
-}
-
-data "context_tags" "apply" {
-  values = { name = var.name }
-}
-
-data "context_label" "plan" {
-  count = local.create_plan ? 1 : 0
-
-  properties = ["namespace", "domain", "environment", "surface", "name", "attributes"]
-  values     = { name = var.name, attributes = "plan" }
-}
-
-data "context_tags" "plan" {
-  count = local.create_plan ? 1 : 0
-
-  values = { name = var.name, attributes = "plan" }
+  apply_name  = "${data.context_label.this.rendered}-apply"
+  plan_name   = "${data.context_label.this.rendered}-plan"
 }
 
 # --- trust: each deploy role trusts EXACTLY its hub CI role (a regular IAM principal that
@@ -72,9 +49,9 @@ data "aws_iam_policy_document" "plan_trust" {
 
 # --- apply (RW) role: the gated write path. Always created. ---
 resource "aws_iam_role" "apply" {
-  name               = data.context_label.apply.rendered
+  name               = local.apply_name
   assume_role_policy = data.aws_iam_policy_document.apply_trust.json
-  tags               = merge(data.context_tags.apply.tags, { Name = data.context_label.apply.rendered })
+  tags               = merge(data.context_tags.this.tags, { Name = local.apply_name })
 
   lifecycle {
     precondition {
@@ -103,9 +80,9 @@ resource "aws_iam_role_policy" "apply_inline" {
 resource "aws_iam_role" "plan" {
   count = local.create_plan ? 1 : 0
 
-  name               = data.context_label.plan[0].rendered
+  name               = local.plan_name
   assume_role_policy = data.aws_iam_policy_document.plan_trust[0].json
-  tags               = merge(data.context_tags.plan[0].tags, { Name = data.context_label.plan[0].rendered })
+  tags               = merge(data.context_tags.this.tags, { Name = local.plan_name })
 
   lifecycle {
     precondition {

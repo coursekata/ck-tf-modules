@@ -195,7 +195,11 @@ No modules.
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
+| <a name="input_attributes"></a> [attributes](#input\_attributes) | Optional `attributes` slot. null/unset inherits the provider base; "" suppresses it here; a value overrides. | `string` | `null` | no |
+| <a name="input_environment"></a> [environment](#input\_environment) | Optional `environment` slot. null/unset inherits the provider base; "" suppresses it here; a value overrides. | `string` | `null` | no |
+| <a name="input_name"></a> [name](#input\_name) | The `name` slot. Defaults to "tfstate" (the bucket is always ck-<domain>-tfstate); override only to adopt a differently-named state bucket. | `string` | `"tfstate"` | no |
 | <a name="input_noncurrent_version_expiration_days"></a> [noncurrent\_version\_expiration\_days](#input\_noncurrent\_version\_expiration\_days) | Days to retain noncurrent object versions before expiry. Versioning keeps state history; this bounds how long superseded versions accumulate. | `number` | `90` | no |
+| <a name="input_surface"></a> [surface](#input\_surface) | Optional `surface` slot. null/unset inherits the provider base; "" suppresses it here; a value overrides. | `string` | `null` | no |
 
 ## Outputs
 
