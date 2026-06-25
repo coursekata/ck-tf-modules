@@ -44,7 +44,7 @@ provider "context" {
 }
 
 module "archive" {
-  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/s3-bucket?ref=v0.4.1"
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/s3-bucket?ref=v0.5.0"
 
   name       = "cloudtrail"
   attributes = "logs" # -> ck-org-cloudtrail-logs

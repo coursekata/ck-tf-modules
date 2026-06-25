@@ -16,7 +16,7 @@ caller side).
 ```hcl
 # ECS task logs (the /aws/ecs/ prefix AWS mandates) -> /aws/ecs/ck-datalake-stg-dbt-runner
 module "runner_logs" {
-  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/log-group?ref=v0.4.2"
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/log-group?ref=v0.5.0"
 
   name              = "dbt-runner"
   name_prefix       = "/aws/ecs/"
@@ -25,7 +25,7 @@ module "runner_logs" {
 
 # The org CloudTrail CloudWatch mirror -> /aws/cloudtrail/ck-org-cloudtrail
 module "cloudtrail_logs" {
-  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/log-group?ref=v0.4.2"
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/log-group?ref=v0.5.0"
 
   name              = "cloudtrail"
   name_prefix       = "/aws/cloudtrail/"

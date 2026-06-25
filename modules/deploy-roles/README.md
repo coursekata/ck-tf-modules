@@ -38,7 +38,7 @@ provider "context" {
 }
 
 module "deploy_roles" {
-  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/deploy-roles?ref=v0.4.0"
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/deploy-roles?ref=v0.5.0"
 
   # The hub CI roles permitted to assume each spoke role (from ck-tooling/environments/hub):
   hub_apply_role_arn = "arn:aws:iam::883385860947:role/ck-tooling-ci-foundation-apply"
