@@ -53,8 +53,19 @@ module "archive" {
   object_lock        = { mode = "GOVERNANCE", retention_years = 3 }
   tls_only           = true
 
-  # grants are usually produced by a dedicated grant module (decoupled, ARN-free):
-  grants = module.cloudtrail_delivery_grant.grants
+  # Grants are ARN-free; the module injects the bucket's own ARN. Shown inline here — in practice
+  # a decoupled producer module (e.g. cloudtrail-delivery-grant) emits this same list.
+  grants = [{
+    sid               = "AllowCloudTrailWrite"
+    principal_service = "cloudtrail.amazonaws.com"
+    actions           = ["s3:PutObject"]
+    key_suffixes      = ["/AWSLogs/123456789012/*"]
+    conditions = [{
+      test     = "StringEquals"
+      variable = "s3:x-amz-acl"
+      values   = ["bucket-owner-full-control"]
+    }]
+  }]
 }
 ```
 

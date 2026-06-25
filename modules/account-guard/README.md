@@ -7,8 +7,7 @@ wrong-profile/-role apply can never create resources in the wrong account.
 The assertion belongs at the **root**, where the credential is established — not inside each
 resource module. Calling it once in every root makes the guard uniform and independent of which
 resources a root creates (a root that builds resources inline, with no guarded module, is still
-protected). It is the credential-side sibling of [`context-schema`](../context-schema) (the
-labeling-side preamble): every root calls both.
+protected).
 
 ## Usage
 

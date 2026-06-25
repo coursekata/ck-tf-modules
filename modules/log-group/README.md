@@ -1,7 +1,7 @@
 # log-group
 
-A CloudWatch Logs log group primitive — the logging sibling of [`s3-bucket`](../s3-bucket). It renders
-its name + tags from the org context provider in the canonical order, prepends an optional
+A CloudWatch Logs log group primitive. It renders its name + tags from the **`cloudposse/context`
+provider** (the consuming root configures it) in the canonical order, prepends an optional
 AWS-mandated source prefix (`/aws/lambda/`, `/aws/ecs/`, `/aws/cloudtrail/`), and applies a retention
 the caller must choose. Centralizing the naming/tagging/retention convention here keeps every log
 group across the org consistent in one place instead of each module hand-rolling its own.
