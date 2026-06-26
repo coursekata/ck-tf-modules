@@ -110,7 +110,12 @@ resource "aws_s3_bucket_server_side_encryption_configuration" "this" {
       sse_algorithm     = local.use_kms ? "aws:kms" : "AES256"
       kms_master_key_id = local.kms_key_arn
     }
-    bucket_key_enabled = local.use_kms
+
+    # Match AWS's current new-bucket defaults: bucket key on (fewer encryption operations — a
+    # cost/perf win for SSE-S3 and SSE-KMS alike) and block SSE-C, so every object uses
+    # account-managed encryption and can't be written with a customer key the account doesn't hold.
+    bucket_key_enabled       = true
+    blocked_encryption_types = ["SSE-C"]
   }
 }
 
