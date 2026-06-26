@@ -7,15 +7,14 @@ wrong-profile/-role apply can never create resources in the wrong account.
 The assertion belongs at the **root**, where the credential is established — not inside each
 resource module. Calling it once in every root makes the guard uniform and independent of which
 resources a root creates (a root that builds resources inline, with no guarded module, is still
-protected). It is the credential-side sibling of [`context-schema`](../context-schema) (the
-labeling-side preamble): every root calls both.
+protected).
 
 ## Usage
 
 ```hcl
 # one account (the common case)
 module "account_guard" {
-  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/account-guard?ref=v0.4.0"
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/account-guard?ref=v0.5.0"
 
   expected_account_id = "123456789012"
 }
@@ -26,12 +25,12 @@ providers) calls the module **once per account**, passing the matching provider:
 
 ```hcl
 module "guard_security" {
-  source              = "git::https://github.com/coursekata/ck-tf-modules.git//modules/account-guard?ref=v0.4.0"
+  source              = "git::https://github.com/coursekata/ck-tf-modules.git//modules/account-guard?ref=v0.5.0"
   expected_account_id = var.security_account_id
 }
 
 module "guard_archive" {
-  source              = "git::https://github.com/coursekata/ck-tf-modules.git//modules/account-guard?ref=v0.4.0"
+  source              = "git::https://github.com/coursekata/ck-tf-modules.git//modules/account-guard?ref=v0.5.0"
   providers           = { aws = aws.log_archive }
   expected_account_id = var.log_archive_account_id
 }

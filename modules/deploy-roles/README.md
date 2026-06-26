@@ -11,40 +11,27 @@ infrastructure:
 
 The standardized, security-critical part is the **trust**: each role trusts EXACTLY one hub
 role ARN (no wildcard, no cross-trust between the plan and apply paths) for `sts:AssumeRole` +
-`sts:TagSession`. The spoke supplies its own permissions (`*_policy_arns` / `*_inline_policy`).
-Names + tags come from the **`cloudposse/context` provider** the consuming root configures —
-which must declare the `attributes` property so the plan role can render `<...>-plan`. The
-wrong-account guard is the **root's** job — the root calls the shared
-[`account-guard`](../account-guard) module once per spoke account — so this module takes no
-`expected_account_id`.
+`sts:TagSession`. The spoke supplies its own permissions (`*_policy_arns` / `*_inline_policy`);
+the apply role needs at least one of `apply_policy_arns` / `apply_inline_policy`. The two role
+names are the rendered org label plus a **literal** role-type suffix — `ck-<domain>-<name>-apply`
+and `-plan` (`name` defaults to `deploy`) — so they are unique by construction. Names + tags come
+from the **`cloudposse/context` provider** the consuming root configures. The wrong-account guard
+is the **root's** job — the root calls the shared [`account-guard`](../account-guard) module once
+per spoke account — so this module takes no `expected_account_id`.
 
 ## Usage (a spoke's `bootstrap/deploy-roles` root)
 
 ```hcl
-# providers.tf — the org context (this repo's namespace/domain; declare `attributes`).
-# Typically sourced from the context-schema module; shown expanded here.
-provider "context" {
-  property_order  = ["namespace", "domain", "environment", "surface", "name", "attributes"]
-  tags_value_case = "lower"
-  properties = {
-    namespace   = { required = true, min_length = 1, validation_regex = "^[a-z0-9-]+$" }
-    domain      = { validation_regex = "^[a-z0-9-]*$" }
-    environment = { validation_regex = "^[a-z0-9-]*$" }
-    surface     = { validation_regex = "^[a-z0-9-]*$" }
-    name        = { validation_regex = "^[a-z0-9-]*$" }
-    attributes  = { validation_regex = "^[a-z0-9-]*$" }
-  }
-  values = { namespace = "ck", domain = "org" } # -> ck-org-deploy[-plan]; a per-surface spoke adds surface = "api"
-}
-
+# The consuming root configures the cloudposse/context provider (typically from the context-schema
+# module); with namespace=ck, domain=org the roles render ck-org-deploy-apply / ck-org-deploy-plan.
 module "deploy_roles" {
-  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/deploy-roles?ref=v0.4.0"
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/deploy-roles?ref=v0.5.0"
 
   # The hub CI roles permitted to assume each spoke role (from ck-tooling/environments/hub):
   hub_apply_role_arn = "arn:aws:iam::883385860947:role/ck-tooling-ci-foundation-apply"
   hub_plan_role_arn  = "arn:aws:iam::883385860947:role/ck-tooling-ci-foundation-plan" # null = apply-only
 
-  # The spoke's own deploy permissions (managed ARNs and/or inline JSON):
+  # The spoke's own deploy permissions — policy resources you define elsewhere in this same root:
   apply_policy_arns = [aws_iam_policy.org_deploy.arn]
   plan_policy_arns  = [aws_iam_policy.org_readonly.arn]
 }

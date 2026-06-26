@@ -47,7 +47,7 @@ provider "context" {
 
 # main.tf — namespace/domain come from the provider, not the module
 module "state_backend" {
-  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/state-backend?ref=v0.4.0"
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/state-backend?ref=v0.5.0"
 }
 
 # outputs.tf
@@ -114,7 +114,7 @@ root's `context` provider):
 
 ```hcl
 module "state_backend" {
-  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/state-backend?ref=v0.4.0"
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/state-backend?ref=v0.5.0"
 }
 ```
 

@@ -30,7 +30,7 @@ terraform {
 
 # 2. Pull the org labeling schema.
 module "context_schema" {
-  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/context-schema?ref=v0.4.0"
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/context-schema?ref=v0.5.0"
 }
 
 # 3. Configure the provider from the module; supply only this repo's values.
