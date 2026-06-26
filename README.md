@@ -1,9 +1,21 @@
-# CourseKata OpenTofu Modules
+# CourseKata Shared IaC Library
 
-The org's shared, hardened OpenTofu modules, consumed across CourseKata's IaC repos
-(`ck-tooling`, `ck-foundation`, `ck-datalake`, …). This repo holds **no roots, no state,
-and no applies** — modules are *consumed*, not deployed — so it carries only the PR-time
-quality bar, not the delivery gate.
+**The org's shared, versioned library of reusable IaC building blocks** — the OpenTofu
+modules, the reusable `tf-quality.yml` CI quality gate, and the `cloudposse/context`
+labeling standard. Everything here is *composed into* a consuming repo at a pinned version
+(`?ref=vX.Y.Z` / `@vX.Y.Z`), never deployed — the repo holds **no roots, no state, and no
+applies**.
+
+It is the **dependency root** of the org's IaC: every other repo (`ck-tooling`,
+`ck-foundation`, `ck-datalake`, …) pins *into* it, it pins out at nothing, and it even lints
+itself with its own quality gate. It is **public** so consumers fetch modules and call its CI
+workflow with no token, and its `v*` tags are frozen immutable. It is a *sibling* of the
+`ck-tooling` control plane, not part of it — the **repo-agnostic, credential-free** quality
+bar lives here; the **AWS/OIDC-coupled** delivery gate (`tf-delivery.yml`) lives in
+`ck-tooling`.
+
+> **Where does a shared thing go?** Repo-agnostic and consumed by everyone → here.
+> Coupled to AWS or the apply-gate → `ck-tooling`.
 
 ## Modules
 
@@ -73,7 +85,13 @@ At `1.0.0`, MINOR returns to "new backward-compatible feature" and MAJOR signals
 SemVer spec leaves 0.x minor/patch meaning undefined; this convention matches Terraform's own
 `~> 0.y.z` constraint behaviour.)
 
-## Quality bar
+## Quality gate (`tf-quality.yml`)
 
 `pre-commit` (run via `prek`) and CI run fmt, validate, tflint, trivy, terraform-docs, and
 `tofu test` on every change. Install the hooks once with `prek install`.
+
+The same checks are packaged as the reusable **[`tf-quality.yml`](.github/workflows/tf-quality.yml)**
+`workflow_call` — credential-free and repo-agnostic. This repo calls it locally; every other IaC
+repo calls it remotely at a pinned tag (`uses: coursekata/ck-tf-modules/.github/workflows/tf-quality.yml@vX.Y.Z`),
+so the org bar is defined once and `prek` keeps remote CI in parity with local pre-commit. Bump a
+tool version here and all consumers inherit it.
