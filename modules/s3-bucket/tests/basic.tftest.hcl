@@ -83,6 +83,10 @@ run "cloudtrail_archive_shape" {
     error_message = "default encryption must be AES256 (SSE-S3) when no kms_key_arn"
   }
   assert {
+    condition     = one(aws_s3_bucket_server_side_encryption_configuration.this.rule).bucket_key_enabled == true && contains(one(aws_s3_bucket_server_side_encryption_configuration.this.rule).blocked_encryption_types, "SSE-C")
+    error_message = "bucket key must be on and SSE-C blocked (AWS current-default hardening), even for SSE-S3"
+  }
+  assert {
     condition     = one(one(aws_s3_bucket_object_lock_configuration.this[0].rule).default_retention).mode == "GOVERNANCE" && one(one(aws_s3_bucket_object_lock_configuration.this[0].rule).default_retention).years == 3
     error_message = "object lock must be GOVERNANCE / 3 years"
   }
