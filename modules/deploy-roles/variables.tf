@@ -13,12 +13,24 @@ variable "name" {
 }
 
 variable "hub_apply_role_arn" {
-  description = "ARN of the hub CI APPLY role (in the tooling account) permitted to sts:AssumeRole the apply (RW) deploy role. This is the gated write path: the hub apply role is itself assumable only from the spoke's protected GitHub Environment."
+  description = "ARN of the hub CI APPLY role (in the tooling account) permitted to sts:AssumeRole the apply (RW) deploy role — the GHA gated write path (the hub apply role is itself assumable only from the spoke's protected GitHub Environment). Optional (default null): a spoke on a non-GHA executor sets apply_principal_arns instead and leaves this null. At least one apply principal (this or apply_principal_arns) is required."
   type        = string
+  default     = null
 
   validation {
-    condition     = can(regex("^arn:aws:iam::[0-9]{12}:role/[^*]+$", var.hub_apply_role_arn))
-    error_message = "hub_apply_role_arn must be a concrete IAM role ARN (arn:aws:iam::<account>:role/<name>) with no wildcard."
+    condition     = var.hub_apply_role_arn == null || can(regex("^arn:aws:iam::[0-9]{12}:role/[^*]+$", coalesce(var.hub_apply_role_arn, "x")))
+    error_message = "hub_apply_role_arn must be null or a concrete IAM role ARN (arn:aws:iam::<account>:role/<name>) with no wildcard."
+  }
+}
+
+variable "apply_principal_arns" {
+  description = "Additional concrete IAM principal ARNs trusted to sts:AssumeRole the apply (RW) deploy role, beyond hub_apply_role_arn. Use for a non-GHA executor — e.g. the CodeBuild apply role in the CodePipeline delivery model. A CodePipeline spoke sets this and leaves hub_apply_role_arn null to retire the GHA apply path. At least one apply principal (this or hub_apply_role_arn) is required."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for arn in var.apply_principal_arns : can(regex("^arn:aws:iam::[0-9]{12}:role/[^*]+$", arn))])
+    error_message = "each apply_principal_arns entry must be a concrete IAM role ARN (arn:aws:iam::<account>:role/<name>) with no wildcard."
   }
 }
 
