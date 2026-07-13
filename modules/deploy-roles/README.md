@@ -4,14 +4,19 @@ The reusable **spoke deploy roles** for the org's OIDC hub-spoke delivery model.
 two IAM roles a spoke's CI assumes (via the ck-tooling hub) to plan/apply its own
 infrastructure:
 
-- **apply (RW)** — assumable ONLY by the spoke's hub CI *apply* role (itself reachable only
-  from the spoke's protected GitHub Environment): the gated write path.
+- **apply (RW)** — the gated write path, assumable by the spoke's apply principal(s): the hub CI
+  *apply* role (itself reachable only from the spoke's protected GitHub Environment) and/or
+  additional principals for a non-GHA executor (e.g. a CodeBuild apply role in the CodePipeline
+  delivery model). At least one is required; a CodePipeline spoke trusts its CodeBuild role and sets
+  `hub_apply_role_arn = null` to retire the GHA apply path.
 - **plan (RO, optional)** — assumable ONLY by the hub CI *plan* role (PR runs): the read path
   for PR plan previews. Omit `hub_plan_role_arn` for an apply-only spoke.
 
-The standardized, security-critical part is the **trust**: each role trusts EXACTLY one hub
-role ARN (no wildcard, no cross-trust between the plan and apply paths) for `sts:AssumeRole` +
-`sts:TagSession`. The spoke supplies its own permissions (`*_policy_arns` / `*_inline_policy`);
+The standardized, security-critical part is the **trust**: every trusted principal is a concrete
+ARN (no wildcard, no cross-trust between the plan and apply paths) for `sts:AssumeRole` +
+`sts:TagSession`. The apply role trusts its apply-principal set (`hub_apply_role_arn` and/or
+`apply_principal_arns`, at least one required); the plan role trusts EXACTLY the hub plan role. The
+spoke supplies its own permissions (`*_policy_arns` / `*_inline_policy`);
 the apply role needs at least one of `apply_policy_arns` / `apply_inline_policy`. The two role
 names are the rendered org label plus a **literal** role-type suffix — `ck-<domain>-<name>-apply`
 and `-plan` (`name` defaults to `deploy`) — so they are unique by construction. Names + tags come
@@ -79,11 +84,12 @@ No modules.
 
 | Name | Description | Type | Default | Required |
 | ---- | ----------- | ---- | ------- | :------: |
-| <a name="input_hub_apply_role_arn"></a> [hub\_apply\_role\_arn](#input\_hub\_apply\_role\_arn) | ARN of the hub CI APPLY role (in the tooling account) permitted to sts:AssumeRole the apply (RW) deploy role. This is the gated write path: the hub apply role is itself assumable only from the spoke's protected GitHub Environment. | `string` | n/a | yes |
 | <a name="input_apply_inline_policy"></a> [apply\_inline\_policy](#input\_apply\_inline\_policy) | Optional inline IAM policy JSON for the apply (RW) deploy role (e.g. from a data.aws\_iam\_policy\_document). | `string` | `null` | no |
 | <a name="input_apply_policy_arns"></a> [apply\_policy\_arns](#input\_apply\_policy\_arns) | Managed IAM policy ARNs attached to the apply (RW) deploy role — the spoke's deploy permissions. Use these or apply\_inline\_policy (at least one is required). | `list(string)` | `[]` | no |
+| <a name="input_apply_principal_arns"></a> [apply\_principal\_arns](#input\_apply\_principal\_arns) | Additional concrete IAM principal ARNs trusted to sts:AssumeRole the apply (RW) deploy role, beyond hub\_apply\_role\_arn. Use for a non-GHA executor — e.g. the CodeBuild apply role in the CodePipeline delivery model. A CodePipeline spoke sets this and leaves hub\_apply\_role\_arn null to retire the GHA apply path. At least one apply principal (this or hub\_apply\_role\_arn) is required. | `list(string)` | `[]` | no |
 | <a name="input_attributes"></a> [attributes](#input\_attributes) | Optional `attributes` slot. null/unset inherits the provider base; "" suppresses it here; a value overrides. | `string` | `null` | no |
 | <a name="input_environment"></a> [environment](#input\_environment) | Optional `environment` slot. null/unset inherits the provider base; "" suppresses it here; a value overrides. | `string` | `null` | no |
+| <a name="input_hub_apply_role_arn"></a> [hub\_apply\_role\_arn](#input\_hub\_apply\_role\_arn) | ARN of the hub CI APPLY role (in the tooling account) permitted to sts:AssumeRole the apply (RW) deploy role — the GHA gated write path (the hub apply role is itself assumable only from the spoke's protected GitHub Environment). Optional (default null): a spoke on a non-GHA executor sets apply\_principal\_arns instead and leaves this null. At least one apply principal (this or apply\_principal\_arns) is required. | `string` | `null` | no |
 | <a name="input_hub_plan_role_arn"></a> [hub\_plan\_role\_arn](#input\_hub\_plan\_role\_arn) | ARN of the hub CI PLAN role permitted to sts:AssumeRole the plan (RO) deploy role. Leave null for an apply-only spoke (no PR plan role is created). | `string` | `null` | no |
 | <a name="input_name"></a> [name](#input\_name) | The `name` slot for the roles. Defaults to "deploy" (ck-<domain>-deploy-apply / -plan); override per spoke. | `string` | `"deploy"` | no |
 | <a name="input_plan_inline_policy"></a> [plan\_inline\_policy](#input\_plan\_inline\_policy) | Optional inline IAM policy JSON for the plan (RO) deploy role. Only used when hub\_plan\_role\_arn is set. | `string` | `null` | no |

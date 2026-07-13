@@ -1,26 +1,37 @@
 # Reusable spoke DEPLOY ROLES for the OIDC hub-spoke delivery model. Creates the IAM roles a
 # spoke's CI assumes (via the hub) to plan/apply its OWN infrastructure:
-#   - apply (RW): assumable ONLY by the hub CI APPLY role, which is itself reachable only from
-#     the spoke's protected GitHub Environment -> the gated write path.
+#   - apply (RW): the gated write path. Assumable by the spoke's apply principal(s) — the hub CI
+#     APPLY role (GitHub-Environment-gated), and/or additional principals for a non-GHA executor
+#     (e.g. a CodeBuild apply role in the CodePipeline delivery model). At least one is required.
 #   - plan  (RO, optional): assumable ONLY by the hub CI PLAN role (PR runs) -> the read path
 #     for PR plan previews. Omit (hub_plan_role_arn = null) for an apply-only spoke.
 #
-# The standardized, security-critical part is the TRUST: each role trusts EXACTLY one hub role
-# ARN (no wildcard) for sts:AssumeRole + sts:TagSession. The spoke supplies its own permissions.
-# The two role names append the role type to the shared context render, so they are unique by
-# construction: apply -> ck-<domain>-<name>-apply, plan -> ck-<domain>-<name>-plan. The suffix is a
-# literal (not a context slot) — the role-type distinction isn't worth a tag; add one manually if
-# ever needed.
+# The standardized, security-critical part is the TRUST: every trusted principal is a concrete ARN
+# (no wildcard), for sts:AssumeRole + sts:TagSession. The plan role trusts EXACTLY the hub plan role.
+# The spoke supplies its own permissions. The two role names append the role type to the shared
+# context render, so they are unique by construction: apply -> ck-<domain>-<name>-apply, plan ->
+# ck-<domain>-<name>-plan. The suffix is a literal (not a context slot) — the role-type distinction
+# isn't worth a tag; add one manually if ever needed.
 locals {
   create_plan = var.hub_plan_role_arn != null
   apply_name  = "${data.context_label.this.rendered}-apply"
   plan_name   = "${data.context_label.this.rendered}-plan"
+
+  # The apply role's trusted principals: the legacy single hub apply role (if set) plus any explicit
+  # apply_principal_arns. distinct() so passing the same ARN both ways doesn't duplicate a statement.
+  # A CodePipeline spoke trusts its CodeBuild apply role here and leaves hub_apply_role_arn null to
+  # retire the GHA apply path (the plan role still trusts the hub plan role: GHA plans, CP applies).
+  apply_trust_principals = distinct(concat(
+    var.hub_apply_role_arn != null ? [var.hub_apply_role_arn] : [],
+    var.apply_principal_arns,
+  ))
 }
 
-# --- trust: each deploy role trusts EXACTLY its hub CI role (a regular IAM principal that
-# itself entered via OIDC). sts:TagSession because configure-aws-credentials tags sessions.
-# The hub CI role need not exist when these roles are created (IAM validates the principal ARN
-# syntactically, not existentially) — but the hub apply must land before an assume succeeds. ---
+# --- trust: the apply role trusts its apply principal(s); the plan role trusts its hub CI plan role
+# (regular IAM principals that themselves entered via OIDC, or a CodeBuild service role).
+# sts:TagSession because configure-aws-credentials tags sessions. A trusted principal need not exist
+# when these roles are created (IAM validates the ARN syntactically, not existentially) — but it must
+# land before an assume succeeds. ---
 data "aws_iam_policy_document" "apply_trust" {
   statement {
     effect  = "Allow"
@@ -28,7 +39,7 @@ data "aws_iam_policy_document" "apply_trust" {
 
     principals {
       type        = "AWS"
-      identifiers = [var.hub_apply_role_arn]
+      identifiers = local.apply_trust_principals
     }
   }
 }
@@ -54,6 +65,10 @@ resource "aws_iam_role" "apply" {
   tags               = merge(data.context_tags.this.tags, { Name = local.apply_name })
 
   lifecycle {
+    precondition {
+      condition     = length(local.apply_trust_principals) > 0
+      error_message = "the apply role needs at least one trusted principal: set hub_apply_role_arn and/or apply_principal_arns (a trustless role can never be assumed)."
+    }
     precondition {
       condition     = length(var.apply_policy_arns) > 0 || var.apply_inline_policy != null
       error_message = "the apply role needs permissions: set apply_policy_arns and/or apply_inline_policy (a permissionless deploy role fails every gated apply with AccessDenied)."
