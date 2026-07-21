@@ -1,11 +1,20 @@
 name: tf-quality
 
-# Reusable code-quality gate for the org's OpenTofu repos. A caller adds a small job that
-# `uses:` this workflow; it runs the SAME pre-commit hooks developers run locally (via prek),
-# so remote CI and local pre-commit stay in parity from a single definition. Bump a tool
-# version here once and every consuming repo inherits it.
+# Reusable quality + security gate for the org's OpenTofu repos. A caller adds a small job that
+# `uses:` this workflow. Bump a tool version here once and every consuming repo inherits it. A
+# reusable-workflow call succeeds only if every job in it succeeds, so a caller's existing
+# `ci-passed` gate picks up jobs added here without touching its branch ruleset.
 #
-# Credential-free: tofu test drives an offline provider and validate runs with -backend=false.
+# Two parity models live here, deliberately:
+#   * `tofu` runs the SAME pre-commit hooks developers run locally (via prek), so remote CI and
+#     local pre-commit stay in lockstep from a single definition.
+#   * `secrets` and `vuln` are CI-only by necessity — a pre-commit hook sees the working tree,
+#     never the commit graph, so a full-history secret scan cannot be expressed as one. Repos
+#     also carry a local gitleaks hook, but it PREVENTS (staged diff, bypassable with
+#     --no-verify) where this GATES (full history, unbypassable).
+#
+# Credential-free: tofu test drives an offline provider, validate runs with -backend=false, and
+# the scanners read only the checkout (trivy fetches its public vulnerability DB).
 # Actions are pinned to full commit SHAs; Dependabot in this repo keeps them current.
 
 on:
@@ -18,6 +27,13 @@ on:
 
 permissions:
   contents: read
+
+# Pins for the tools more than one job installs — kept here so a bump lands in one place and
+# the jobs cannot drift onto different versions of the same scanner.
+env:
+  GITLEAKS_VERSION: "8.30.1" # bump manually — must match contributors' local gitleaks
+  GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
+  TRIVY_VERSION: "v0.71.1" # bump manually
 
 jobs:
   tofu:
@@ -37,7 +53,7 @@ jobs:
       - name: Install trivy
         uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
         with:
-          version: v0.71.1 # bump manually
+          version: ${{ env.TRIVY_VERSION }}
 
       - name: Install terraform-docs
         run: |
@@ -51,6 +67,16 @@ jobs:
           tar -xzf /tmp/tfdocs.tgz -C /tmp terraform-docs
           sudo install /tmp/terraform-docs /usr/local/bin/terraform-docs
 
+      - name: Install gitleaks
+        # The gitleaks-system hook resolves gitleaks from PATH (matching how every other tool in
+        # this bar is provided); the golang-language variant would build it from source instead.
+        run: |
+          curl -fsSLo /tmp/gitleaks.tgz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tgz" | sha256sum -c -
+          tar -xzf /tmp/gitleaks.tgz -C /tmp gitleaks
+          sudo install /tmp/gitleaks /usr/local/bin/gitleaks
+
       # prek's own action rather than `uvx prek`: it pins the tool the way every other tool here is
       # pinned, and its cache holds the HOOK environments — the part that actually costs time. The
       # uv route cached only the tool binary, and in a Terraform-only consumer it could not even do
@@ -60,3 +86,54 @@ jobs:
         with:
           prek-version: "0.4.10" # bump manually — must match contributors' local prek
           extra-args: --all-files
+
+  # The committed-secret gate. Scans the whole commit graph, not the tip: a secret that was
+  # committed and later deleted is still disclosed to anyone who can clone, so a working-tree
+  # scan would call that repo clean. Confirmed false positives are suppressed per-finding in the
+  # caller's .gitleaksignore (an auditable fingerprint), never by narrowing the scan.
+  secrets:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+        with:
+          fetch-depth: 0 # the default shallow clone would scan a single commit
+
+      - name: Install gitleaks
+        run: |
+          curl -fsSLo /tmp/gitleaks.tgz \
+            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
+          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tgz" | sha256sum -c -
+          tar -xzf /tmp/gitleaks.tgz -C /tmp gitleaks
+          sudo install /tmp/gitleaks /usr/local/bin/gitleaks
+
+      - name: Scan the full history for committed secrets
+        run: gitleaks git --redact --no-banner
+
+  # The dependency-CVE gate. Bites wherever a caller declares a lockfile; repos that carry none
+  # pass trivially, which is what keeps this uniform across the org — a repo that later grows a
+  # lockfile is gated the day it lands rather than the day someone remembers to wire it up.
+  vuln:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+
+      - name: Install trivy
+        uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
+        with:
+          version: ${{ env.TRIVY_VERSION }}
+
+      - name: Gate on known-vulnerable dependencies
+        # --ignore-unfixed: a CVE with no released fix has no action a PR author can take, and a
+        # gate nobody can clear is a gate that gets switched off.
+        # --skip-dirs: vendored Terraform modules ship Terratest fixtures with their own go.mod,
+        # which are not our dependency tree and are present only when a root has been init'd.
+        run: |
+          trivy fs --scanners vuln \
+            --severity HIGH,CRITICAL \
+            --ignore-unfixed \
+            --skip-dirs '**/.terraform' \
+            --skip-dirs '**/dbt_packages' \
+            --skip-dirs '**/target' \
+            --exit-code 1 \
+            --no-progress \
+            .
