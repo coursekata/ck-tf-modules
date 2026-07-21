@@ -63,6 +63,45 @@ variable "plan_policy_arns" {
   default     = []
 }
 
+variable "managed_role_boundary" {
+  description = <<-EOT
+    Opt-in privilege-escalation guard for a spoke whose apply role MINTS IAM roles. Set it and the
+    module creates a permissions-boundary policy from `policy_document` and generates the entire
+    role-management grant itself, so the spoke never hand-writes one: every widening action
+    (CreateRole/PutRolePolicy/AttachRolePolicy/...) is conditioned on the minted role carrying THAT
+    boundary, the boundary can never be detached, the boundary policy can never be rewritten, and
+    the deploy roles are explicitly denied to themselves. `role_arn_patterns` are the roles the
+    apply role may manage — they MUST NOT match the deploy roles' own ARNs (the module denies that
+    regardless, but a pattern that overlaps them is a design smell). Leave null for a spoke whose
+    apply role mints no roles.
+  EOT
+
+  type = object({
+    policy_document   = string
+    role_arn_patterns = list(string)
+  })
+  default = null
+
+  validation {
+    condition     = var.managed_role_boundary == null || length(try(var.managed_role_boundary.role_arn_patterns, [])) > 0
+    error_message = "managed_role_boundary.role_arn_patterns must list at least one role ARN pattern (an empty set grants nothing and silently disables the guard)."
+  }
+
+  validation {
+    condition = var.managed_role_boundary == null || alltrue([
+      for arn in var.managed_role_boundary.role_arn_patterns : can(regex("^arn:aws:iam::[0-9]{12}:role/.+$", arn))
+    ])
+    error_message = "each managed_role_boundary.role_arn_patterns entry must be an IAM role ARN (arn:aws:iam::<account>:role/<pattern>); a bare wildcard or a non-role ARN would let the apply role manage principals outside the intended set."
+  }
+
+  validation {
+    condition = var.managed_role_boundary == null || length(distinct([
+      for arn in var.managed_role_boundary.role_arn_patterns : regex("^arn:aws:iam::([0-9]{12}):role/", arn)[0]
+    ])) == 1
+    error_message = "all managed_role_boundary.role_arn_patterns must name the SAME account — the boundary policy is created in that one account, and a pattern pointing elsewhere would be silently unbounded."
+  }
+}
+
 variable "plan_inline_policy" {
   description = "Optional inline IAM policy JSON for the plan (RO) deploy role. Only used when hub_plan_role_arn is set."
   type        = string

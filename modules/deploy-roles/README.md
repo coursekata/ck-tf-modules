@@ -45,6 +45,57 @@ module "deploy_roles" {
 Wire the outputs back into the hub's `spokes.auto.tfvars` (`apply_role_arns` / `plan_role_arns`)
 and into the env-root providers' `assume_role`.
 
+## Spokes whose apply role mints IAM roles (`managed_role_boundary`)
+
+An apply role that can create IAM roles can otherwise create one **more privileged than itself** —
+`CreateRole` → `AttachRolePolicy AdministratorAccess` → `PassRole` — which turns a compromised CI
+apply into full administrative access. Scoping `iam:*` to a role-name prefix does not close this;
+the prefix bounds *which* roles it can mint, not *how much* they may hold.
+
+Set `managed_role_boundary` and the module takes over the whole role-management grant:
+
+```hcl
+module "deploy_roles" {
+  source = "git::https://github.com/coursekata/ck-tf-modules.git//modules/deploy-roles?ref=v0.5.3"
+
+  apply_principal_arns = [...]
+  apply_inline_policy  = data.aws_iam_policy_document.spoke_apply.json # NO iam:* statements
+
+  managed_role_boundary = {
+    policy_document   = data.aws_iam_policy_document.workload_ceiling.json
+    role_arn_patterns = ["arn:aws:iam::900303592457:role/ck-datalake-prd-*"]
+  }
+}
+```
+
+The spoke's own `apply_inline_policy` should contain **no** `iam:*` statements — the module emits
+them, and hand-written ones are how the escalation gets reintroduced. What it generates:
+
+- every widening action (`CreateRole`, `PutRolePolicy`, `AttachRolePolicy`, `DetachRolePolicy`,
+  `DeleteRolePolicy`, `PutRolePermissionsBoundary`) conditioned on `iam:PermissionsBoundary`
+  equalling the boundary policy this module creates — so a role minted without it is denied, and so
+  is adding a policy to an unbounded role that already exists;
+- the lifecycle/read actions that **don't** accept that condition key (`UpdateAssumeRolePolicy`,
+  `DeleteRole`, `TagRole`, `PassRole`, the `Get`/`List` family) unconditioned — safe only because
+  `CreateRole` is conditioned, so every role matching the patterns is bounded by construction;
+- `Deny` on `iam:DeleteRolePermissionsBoundary` (`Resource: "*"`) so the boundary can't be stripped;
+- `Deny` on editing the boundary policy itself, so the ceiling can't be rewritten;
+- `Deny` on `iam:*` against the **deploy roles' own ARNs**.
+
+That last one closes the shortest path, and no boundary condition can substitute for it: the deploy
+roles carry no boundary themselves, so if their ARNs fall inside `role_arn_patterns` the apply role
+can attach `AdministratorAccess` to *itself* in one call, or rewrite its own trust policy to admit
+an arbitrary principal. Keep the patterns disjoint from the deploy-role names (`ck-<domain>-prd-*`
+rather than `ck-<domain>-*`); the `Deny` is the backstop, not the design.
+
+Pass `managed_role_boundary_arn` to the env roots so each `aws_iam_role` they create sets
+`permissions_boundary` to it — the boundary is only enforced on roles that carry it, and the
+conditioned grant is what makes carrying it mandatory.
+
+Boundaries also limit **resource-based** policies that grant to a bounded role's ARN, so the ceiling
+must cover every cross-account grant the workload roles rely on. Too narrow a ceiling doesn't fail
+loudly at apply — it silently breaks the workload at runtime.
+
 <!-- BEGIN_TF_DOCS -->
 ## Requirements
 
@@ -69,12 +120,14 @@ No modules.
 
 | Name | Type |
 | ---- | ---- |
+| [aws_iam_policy.managed_role_boundary](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_policy) | resource |
 | [aws_iam_role.apply](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role) | resource |
 | [aws_iam_role.plan](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role) | resource |
 | [aws_iam_role_policy.apply_inline](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
 | [aws_iam_role_policy.plan_inline](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy) | resource |
 | [aws_iam_role_policy_attachment.apply_managed](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy_attachment) | resource |
 | [aws_iam_role_policy_attachment.plan_managed](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/resources/iam_role_policy_attachment) | resource |
+| [aws_iam_policy_document.apply_combined](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.apply_trust](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [aws_iam_policy_document.plan_trust](https://registry.terraform.io/providers/hashicorp/aws/latest/docs/data-sources/iam_policy_document) | data source |
 | [context_label.this](https://registry.terraform.io/providers/cloudposse/context/latest/docs/data-sources/label) | data source |
@@ -91,6 +144,7 @@ No modules.
 | <a name="input_environment"></a> [environment](#input\_environment) | Optional `environment` slot. null/unset inherits the provider base; "" suppresses it here; a value overrides. | `string` | `null` | no |
 | <a name="input_hub_apply_role_arn"></a> [hub\_apply\_role\_arn](#input\_hub\_apply\_role\_arn) | ARN of the hub CI APPLY role (in the tooling account) permitted to sts:AssumeRole the apply (RW) deploy role — the GHA gated write path (the hub apply role is itself assumable only from the spoke's protected GitHub Environment). Optional (default null): a spoke on a non-GHA executor sets apply\_principal\_arns instead and leaves this null. At least one apply principal (this or apply\_principal\_arns) is required. | `string` | `null` | no |
 | <a name="input_hub_plan_role_arn"></a> [hub\_plan\_role\_arn](#input\_hub\_plan\_role\_arn) | ARN of the hub CI PLAN role permitted to sts:AssumeRole the plan (RO) deploy role. Leave null for an apply-only spoke (no PR plan role is created). | `string` | `null` | no |
+| <a name="input_managed_role_boundary"></a> [managed\_role\_boundary](#input\_managed\_role\_boundary) | Opt-in privilege-escalation guard for a spoke whose apply role MINTS IAM roles. Set it and the<br/>module creates a permissions-boundary policy from `policy_document` and generates the entire<br/>role-management grant itself, so the spoke never hand-writes one: every widening action<br/>(CreateRole/PutRolePolicy/AttachRolePolicy/...) is conditioned on the minted role carrying THAT<br/>boundary, the boundary can never be detached, the boundary policy can never be rewritten, and<br/>the deploy roles are explicitly denied to themselves. `role_arn_patterns` are the roles the<br/>apply role may manage — they MUST NOT match the deploy roles' own ARNs (the module denies that<br/>regardless, but a pattern that overlaps them is a design smell). Leave null for a spoke whose<br/>apply role mints no roles. | <pre>object({<br/>    policy_document   = string<br/>    role_arn_patterns = list(string)<br/>  })</pre> | `null` | no |
 | <a name="input_name"></a> [name](#input\_name) | The `name` slot for the roles. Defaults to "deploy" (ck-<domain>-deploy-apply / -plan); override per spoke. | `string` | `"deploy"` | no |
 | <a name="input_plan_inline_policy"></a> [plan\_inline\_policy](#input\_plan\_inline\_policy) | Optional inline IAM policy JSON for the plan (RO) deploy role. Only used when hub\_plan\_role\_arn is set. | `string` | `null` | no |
 | <a name="input_plan_policy_arns"></a> [plan\_policy\_arns](#input\_plan\_policy\_arns) | Managed IAM policy ARNs attached to the plan (RO) deploy role. Only used when hub\_plan\_role\_arn is set. | `list(string)` | `[]` | no |
@@ -102,6 +156,7 @@ No modules.
 | ---- | ----------- |
 | <a name="output_apply_role_arn"></a> [apply\_role\_arn](#output\_apply\_role\_arn) | ARN of the apply (RW) deploy role — wire this into the hub's apply\_role\_arns for this spoke. |
 | <a name="output_apply_role_name"></a> [apply\_role\_name](#output\_apply\_role\_name) | Name of the apply (RW) deploy role (e.g. ck-org-deploy). |
+| <a name="output_managed_role_boundary_arn"></a> [managed\_role\_boundary\_arn](#output\_managed\_role\_boundary\_arn) | ARN of the permissions-boundary policy every role minted by the apply role must carry — pass it to the env roots so their aws\_iam\_role resources set permissions\_boundary to it. null when managed\_role\_boundary is unset. |
 | <a name="output_plan_role_arn"></a> [plan\_role\_arn](#output\_plan\_role\_arn) | ARN of the plan (RO) deploy role — wire into the hub's plan\_role\_arns. null for an apply-only spoke. |
 | <a name="output_plan_role_name"></a> [plan\_role\_name](#output\_plan\_role\_name) | Name of the plan (RO) deploy role (e.g. ck-org-deploy-plan). null for an apply-only spoke. |
 <!-- END_TF_DOCS -->
