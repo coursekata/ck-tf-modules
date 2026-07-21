@@ -8,6 +8,17 @@ repos:
       - id: check-yaml
       - id: check-added-large-files
 
+  # Stops a secret from ever entering the history; CI re-checks the full commit graph, because
+  # this hook only sees the staged diff and yields to --no-verify.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: v8.30.1
+    hooks:
+      # -system resolves gitleaks from PATH like the terraform hooks below resolve their tools;
+      # upstream omits pass_filenames on this variant only, so the staged paths would otherwise
+      # be appended and the first one read as gitleaks' target directory.
+      - id: gitleaks-system
+        pass_filenames: false
+
   - repo: https://github.com/antonbabenko/pre-commit-terraform
     rev: v1.108.0
     hooks:
