@@ -160,9 +160,11 @@ data "aws_iam_policy_document" "apply_combined" {
     }
   }
 
-  # Lifecycle and read actions that do NOT accept the iam:PermissionsBoundary condition key. Safe
-  # unconditioned only because CreateRole above IS conditioned: every role matching the patterns
-  # therefore carries the boundary, which is also what makes the unconditioned iam:PassRole here
+  # Deliberately unconditioned. AWS's own boundary-delegation pattern conditions the create/attach/put
+  # family above and nothing else, and a condition on an action that never populates
+  # iam:PermissionsBoundary would simply never match — costing the apply role these actions entirely.
+  # Safety here does not rest on that: CreateRole above IS conditioned, so every role matching the
+  # patterns carries the boundary, which is equally what makes the unconditioned iam:PassRole
   # non-escalating — the role being passed is bounded by construction.
   statement {
     sid    = "ManageBoundedRolesLifecycle"
