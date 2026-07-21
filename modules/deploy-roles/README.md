@@ -75,9 +75,11 @@ them, and hand-written ones are how the escalation gets reintroduced. What it ge
   `DeleteRolePolicy`, `PutRolePermissionsBoundary`) conditioned on `iam:PermissionsBoundary`
   equalling the boundary policy this module creates — so a role minted without it is denied, and so
   is adding a policy to an unbounded role that already exists;
-- the lifecycle/read actions that **don't** accept that condition key (`UpdateAssumeRolePolicy`,
-  `DeleteRole`, `TagRole`, `PassRole`, the `Get`/`List` family) unconditioned — safe only because
-  `CreateRole` is conditioned, so every role matching the patterns is bounded by construction;
+- the lifecycle/read actions (`UpdateAssumeRolePolicy`, `DeleteRole`, `TagRole`, `PassRole`, the
+  `Get`/`List` family) unconditioned — AWS's delegation pattern conditions only the create/attach/put
+  family, and a condition on an action that never populates the key would never match, costing the
+  apply role those actions outright. Safety doesn't rest on that anyway: `CreateRole` is conditioned,
+  so every role matching the patterns is bounded by construction;
 - `Deny` on `iam:DeleteRolePermissionsBoundary` (`Resource: "*"`) so the boundary can't be stripped;
 - `Deny` on editing the boundary policy itself, so the ceiling can't be rewritten;
 - `Deny` on `iam:*` against the **deploy roles' own ARNs**.
