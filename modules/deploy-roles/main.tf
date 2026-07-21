@@ -25,6 +25,30 @@ locals {
     var.hub_apply_role_arn != null ? [var.hub_apply_role_arn] : [],
     var.apply_principal_arns,
   ))
+
+  manage_roles  = var.managed_role_boundary != null
+  boundary_name = "${data.context_label.this.rendered}-managed-role-boundary"
+
+  # The boundary lives in the account whose roles it bounds — taken from the managed patterns (all
+  # validated to share one account) rather than a caller-identity lookup, so the ARN is known at
+  # PLAN. That matters beyond tests: the generated grant embeds this ARN in its condition, and the
+  # pipeline approver should see the real policy in the plan, not "known after apply".
+  boundary_account = local.manage_roles ? regex("^arn:aws:iam::([0-9]{12}):role/", var.managed_role_boundary.role_arn_patterns[0])[0] : ""
+  boundary_arn     = "arn:aws:iam::${local.boundary_account}:policy/${local.boundary_name}"
+
+  # The deploy roles' own ARNs — the set the apply role must never be able to turn on itself. Built
+  # from the rendered names (which are unique by construction) rather than aws_iam_role.*.arn, so
+  # they are known at PLAN time: the generated policy renders in full for review and the self-Deny
+  # cannot form a cycle with the apply role that carries it. The account is wildcarded because this
+  # is a Deny — matching a same-named deploy role in any account is the safer failure direction.
+  self_arns = compact([
+    "arn:aws:iam::*:role/${local.apply_name}",
+    local.create_plan ? "arn:aws:iam::*:role/${local.plan_name}" : null,
+  ])
+
+  # The apply role's inline policy: the spoke's own document, plus the generated role-management
+  # grant when the escalation guard is on.
+  apply_inline_json = local.manage_roles ? data.aws_iam_policy_document.apply_combined[0].json : var.apply_inline_policy
 }
 
 # --- trust: the apply role trusts its apply principal(s); the plan role trusts its hub CI plan role
@@ -70,7 +94,7 @@ resource "aws_iam_role" "apply" {
       error_message = "the apply role needs at least one trusted principal: set hub_apply_role_arn and/or apply_principal_arns (a trustless role can never be assumed)."
     }
     precondition {
-      condition     = length(var.apply_policy_arns) > 0 || var.apply_inline_policy != null
+      condition     = length(var.apply_policy_arns) > 0 || var.apply_inline_policy != null || local.manage_roles
       error_message = "the apply role needs permissions: set apply_policy_arns and/or apply_inline_policy (a permissionless deploy role fails every gated apply with AccessDenied)."
     }
   }
@@ -84,11 +108,113 @@ resource "aws_iam_role_policy_attachment" "apply_managed" {
 }
 
 resource "aws_iam_role_policy" "apply_inline" {
-  count = var.apply_inline_policy != null ? 1 : 0
+  # Statically known so count resolves at plan — apply_inline_json itself renders from a document
+  # that isn't final until the boundary policy exists.
+  count = var.apply_inline_policy != null || local.manage_roles ? 1 : 0
 
   name   = "deploy-permissions"
   role   = aws_iam_role.apply.id
-  policy = var.apply_inline_policy
+  policy = local.apply_inline_json
+}
+
+# --- privilege-escalation guard (opt-in via managed_role_boundary) ---------------------------
+# An apply role that can mint IAM roles can otherwise mint one MORE privileged than itself:
+# CreateRole -> AttachRolePolicy AdministratorAccess -> PassRole. The boundary closes that at the
+# intersection — a minted role's effective permissions are (its policies ∩ this ceiling) — and the
+# generated grant below is what makes the boundary unavoidable rather than merely available.
+resource "aws_iam_policy" "managed_role_boundary" {
+  count = local.manage_roles ? 1 : 0
+
+  name        = local.boundary_name
+  description = "Maximum permissions for any IAM role minted by ${local.apply_name}."
+  policy      = var.managed_role_boundary.policy_document
+  tags        = merge(data.context_tags.this.tags, { Name = local.boundary_name })
+}
+
+data "aws_iam_policy_document" "apply_combined" {
+  count = local.manage_roles ? 1 : 0
+
+  source_policy_documents = compact([var.apply_inline_policy])
+
+  # Every action that can WIDEN a managed role's permissions, gated on that role carrying our
+  # boundary. iam:PermissionsBoundary checks the boundary attached to the target principal, so a
+  # role created without it — or an attempt to add a policy to an unbounded pre-existing role —
+  # fails the condition and is denied.
+  statement {
+    sid    = "ManageBoundedRolesOnly"
+    effect = "Allow"
+    actions = [
+      "iam:CreateRole",
+      "iam:PutRolePolicy",
+      "iam:DeleteRolePolicy",
+      "iam:AttachRolePolicy",
+      "iam:DetachRolePolicy",
+      "iam:PutRolePermissionsBoundary",
+    ]
+    resources = var.managed_role_boundary.role_arn_patterns
+
+    condition {
+      test     = "StringEquals"
+      variable = "iam:PermissionsBoundary"
+      values   = [local.boundary_arn]
+    }
+  }
+
+  # Lifecycle and read actions that do NOT accept the iam:PermissionsBoundary condition key. Safe
+  # unconditioned only because CreateRole above IS conditioned: every role matching the patterns
+  # therefore carries the boundary, which is also what makes the unconditioned iam:PassRole here
+  # non-escalating — the role being passed is bounded by construction.
+  statement {
+    sid    = "ManageBoundedRolesLifecycle"
+    effect = "Allow"
+    actions = [
+      "iam:GetRole",
+      "iam:UpdateRole",
+      "iam:UpdateAssumeRolePolicy",
+      "iam:DeleteRole",
+      "iam:TagRole",
+      "iam:UntagRole",
+      "iam:ListRoleTags",
+      "iam:GetRolePolicy",
+      "iam:ListRolePolicies",
+      "iam:ListAttachedRolePolicies",
+      "iam:PassRole",
+    ]
+    resources = var.managed_role_boundary.role_arn_patterns
+  }
+
+  # Resource "*", not the patterns: detaching a boundary is never legitimate for this role, and a
+  # narrower resource would leave the action reachable on anything the patterns don't cover.
+  statement {
+    sid       = "NoBoundaryDetach"
+    effect    = "Deny"
+    actions   = ["iam:DeleteRolePermissionsBoundary"]
+    resources = ["*"]
+  }
+
+  # The ceiling itself is off-limits — otherwise the role rewrites the boundary, then mints freely.
+  statement {
+    sid    = "NoBoundaryPolicyEdit"
+    effect = "Deny"
+    actions = [
+      "iam:CreatePolicyVersion",
+      "iam:DeletePolicy",
+      "iam:DeletePolicyVersion",
+      "iam:SetDefaultPolicyVersion",
+    ]
+    resources = [local.boundary_arn]
+  }
+
+  # The shortest escalation path is self-modification, and no boundary condition can close it: the
+  # deploy roles carry no boundary themselves, so a pattern overlapping their ARNs would let the
+  # apply role attach AdministratorAccess to ITSELF, or rewrite its own trust policy to admit an
+  # arbitrary principal. Deny beats any Allow, including a spoke's own document.
+  statement {
+    sid       = "NoSelfModification"
+    effect    = "Deny"
+    actions   = ["iam:*"]
+    resources = local.self_arns
+  }
 }
 
 # --- plan (RO) role: PR-scoped read path. Optional — apply-only spokes omit it. ---
