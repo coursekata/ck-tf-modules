@@ -1,6 +1,6 @@
 # Dependabot keeps action SHAs, the tofu provider constraints, and pre-commit hook revs
-# current. The 3 tool-version strings in tf-quality.yml (tofu/trivy/terraform-docs) aren't an
-# ecosystem Dependabot can see, so they're bumped manually — a small, rare chore.
+# current. The 4 tool-version strings in tf-quality.yml (tofu/trivy/terraform-docs/gitleaks)
+# aren't an ecosystem Dependabot can see, so they're bumped manually — a small, rare chore.
 version: 2
 updates:
   - package-ecosystem: github-actions
@@ -11,8 +11,17 @@ updates:
       actions:
         patterns: ["*"]
 
+  # Every module, not just the one that happened to exist when this file was written — each
+  # declares its own provider constraints, and an unlisted module's simply never move.
   - package-ecosystem: terraform
     directories:
+      - "/modules/account-guard"
+      - "/modules/context-schema"
+      - "/modules/deploy-roles"
+      - "/modules/kms"
+      - "/modules/log-group"
+      - "/modules/notifications"
+      - "/modules/s3-bucket"
       - "/modules/state-backend"
     schedule:
       interval: weekly

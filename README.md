@@ -87,11 +87,32 @@ SemVer spec leaves 0.x minor/patch meaning undefined; this convention matches Te
 
 ## Quality gate (`tf-quality.yml`)
 
-`pre-commit` (run via `prek`) and CI run fmt, validate, tflint, trivy, terraform-docs, and
-`tofu test` on every change. Install the hooks once with `prek install`.
+`pre-commit` (run via `prek`) and CI run fmt, validate, tflint, trivy, terraform-docs, `tofu
+test`, and a gitleaks secret scan on every change. Install the hooks once with `prek install`.
+
+CI additionally runs two gates that a pre-commit hook cannot express, because a hook only ever
+sees the staged diff: a **full-history committed-secret scan** (a secret committed and later
+deleted is still disclosed to anyone who can clone) and a **dependency-CVE scan** over any
+lockfile the repo declares. The local gitleaks hook prevents; these gate.
 
 The same checks are packaged as the reusable **[`tf-quality.yml`](.github/workflows/tf-quality.yml)**
 `workflow_call` — credential-free and repo-agnostic. This repo calls it locally; every other IaC
 repo calls it remotely at a pinned tag (`uses: coursekata/ck-tf-modules/.github/workflows/tf-quality.yml@vX.Y.Z`),
-so the org bar is defined once and `prek` keeps remote CI in parity with local pre-commit. Bump a
-tool version here and all consumers inherit it.
+so the org bar is defined once and `prek` keeps remote CI in parity with local pre-commit for the
+hook-expressible checks. Bump a tool version here and all consumers inherit it.
+
+### Local prerequisites
+
+The hooks resolve these from `PATH`, so install them once (CI installs the same set at pinned
+versions). Versions that must match CI are called out in `tf-quality.yml`.
+
+| Tool | Why |
+|------|-----|
+| [`tofu`](https://opentofu.org) | fmt, validate, and `tofu test` |
+| [`tflint`](https://github.com/terraform-linters/tflint) | lint |
+| [`trivy`](https://trivy.dev) | misconfiguration scanning |
+| [`terraform-docs`](https://terraform-docs.io) | generated input/output tables (table format differs by version — match the pin) |
+| [`gitleaks`](https://gitleaks.io) | secret detection |
+| [`prek`](https://github.com/j178/prek) | the hook runner itself |
+
+On macOS: `brew install opentofu tflint trivy terraform-docs gitleaks prek`.
