@@ -28,18 +28,18 @@ on:
 permissions:
   contents: read
 
-# Pins for the tools more than one job installs — kept here so a bump lands in one place and
-# the jobs cannot drift onto different versions of the same scanner.
+# Tools installed through an action float: the action resolves the latest release and Dependabot
+# keeps the action itself current, so there is nothing here to rot. The two raw downloads below
+# are the exception — a checksum only means something against a known version, so those stay
+# pinned and are bumped with their checksum together.
 #
-# gitleaks is installed as a pinned binary rather than via gitleaks/gitleaks-action, and that is
-# deliberate: the action requires a GITLEAKS_LICENSE secret for organization-owned repos, which
-# this workflow cannot hold — it is credential-free by design, and being a reusable workflow, a
-# secret would have to be plumbed through every caller. It is also a run-action, so it would not
-# put gitleaks on PATH for the pre-commit hook the `tofu` job runs. Don't "upgrade" to it.
+# gitleaks is a pinned binary rather than gitleaks/gitleaks-action deliberately: that action needs
+# a GITLEAKS_LICENSE secret for organization-owned repos, which this workflow cannot hold without
+# giving up being credential-free and plumbing a secret through every caller. It is also a
+# run-action, so it would not put gitleaks on PATH for the hook the `tofu` job runs.
 env:
-  GITLEAKS_VERSION: "8.30.1" # bump manually — must match contributors' local gitleaks
+  GITLEAKS_VERSION: "8.30.1"
   GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
-  TRIVY_VERSION: "v0.72.0" # bump manually
 
 jobs:
   tofu:
@@ -58,14 +58,12 @@ jobs:
 
       - name: Install trivy
         uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
-        with:
-          version: ${{ env.TRIVY_VERSION }}
 
       - name: Install terraform-docs
         run: |
           # No official install-only action exists (the gh-action is a Docker run-action that
           # fights the prek model), so install the pinned binary with a checksum gate.
-          ver=v0.24.0 # bump manually — must match contributors' local terraform-docs (table format differs by version)
+          ver=v0.24.0 # pinned so the checksum below means something; bump the two together
           sha=9005daf969de0b50134493a2c00078b49f5f5b39d021cda7c89bf4d4f3d776d3
           curl -fsSLo /tmp/tfdocs.tgz \
             "https://github.com/terraform-docs/terraform-docs/releases/download/${ver}/terraform-docs-${ver}-linux-amd64.tar.gz"
@@ -83,10 +81,10 @@ jobs:
           tar -xzf /tmp/gitleaks.tgz -C /tmp gitleaks
           sudo install /tmp/gitleaks /usr/local/bin/gitleaks
 
-      # prek's own action rather than `uvx prek`: it pins the tool the way every other tool here is
-      # pinned, and its cache holds the HOOK environments — the part that actually costs time. The
-      # uv route cached only the tool binary, and in a Terraform-only consumer it could not even do
-      # that, since uv keys its cache on Python dependency files that such a repo never has.
+      # prek's own action rather than `uvx prek`: its cache holds the HOOK environments — the part
+      # that actually costs time. The uv route cached only the tool binary, and in a Terraform-only
+      # consumer it could not even do that, since uv keys its cache on Python dependency files that
+      # such a repo never has.
       - name: Run the quality bar
         uses: j178/prek-action@5337cb91e0fa35a7ff31b9ca345126d8bbbcdf16 # v2.0.6
         env:
@@ -94,7 +92,6 @@ jobs:
           # across the runner's IP. Ambient run token, not a secret a caller has to supply.
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          prek-version: "0.4.10" # bump manually — must match contributors' local prek
           extra-args: --all-files
 
   # The committed-secret gate. Scans the whole commit graph, not the tip: a secret that was
@@ -135,8 +132,6 @@ jobs:
 
       - name: Install trivy
         uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
-        with:
-          version: ${{ env.TRIVY_VERSION }}
 
       - name: Gate on known-vulnerable dependencies
         # --severity HIGH,CRITICAL: the floor a merge should block on. Gating on MEDIUM across a
