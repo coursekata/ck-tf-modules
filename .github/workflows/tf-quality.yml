@@ -63,7 +63,7 @@ jobs:
         run: |
           # No official install-only action exists (the gh-action is a Docker run-action that
           # fights the prek model), so install the pinned binary with a checksum gate.
-          ver=v0.24.0 # pinned so the checksum below means something; bump the two together
+          ver=v0.24.0
           sha=9005daf969de0b50134493a2c00078b49f5f5b39d021cda7c89bf4d4f3d776d3
           curl -fsSLo /tmp/tfdocs.tgz \
             "https://github.com/terraform-docs/terraform-docs/releases/download/${ver}/terraform-docs-${ver}-linux-amd64.tar.gz"
@@ -81,10 +81,6 @@ jobs:
           tar -xzf /tmp/gitleaks.tgz -C /tmp gitleaks
           sudo install /tmp/gitleaks /usr/local/bin/gitleaks
 
-      # prek's own action rather than `uvx prek`: its cache holds the HOOK environments — the part
-      # that actually costs time. The uv route cached only the tool binary, and in a Terraform-only
-      # consumer it could not even do that, since uv keys its cache on Python dependency files that
-      # such a repo never has.
       - name: Run the quality bar
         uses: j178/prek-action@5337cb91e0fa35a7ff31b9ca345126d8bbbcdf16 # v2.0.6
         env:
