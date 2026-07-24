@@ -47,6 +47,23 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
+      # Ban the HCL constructs that turn a plan into arbitrary code execution — an `external` data
+      # source, a `provisioner` block, or a provider `endpoints` override — before anything below
+      # inits and runs provider code. This precedes the tool installs and the prek run, and a failing
+      # step halts the job, so `tofu init` never runs on a PR that introduces one. A pre-commit hook
+      # cannot provide this: prek runs every hook regardless of another's failure, so it can warn but
+      # not gate. None of these has a legitimate use in the org's roots, so the check is near-free.
+      - name: Ban plan-time code-execution constructs
+        run: |
+          mapfile -t files < <(git ls-files '*.tf')
+          if [ "${#files[@]}" -gt 0 ] && hits=$(grep -nHE \
+            'data[[:space:]]+"external"|provisioner[[:space:]]+"|(^|[[:space:]])endpoints[[:space:]]*[={]' \
+            "${files[@]}"); then
+            echo "::error::Disallowed plan-time code-execution construct (external data source / provisioner / provider endpoints override):"
+            echo "$hits"
+            exit 1
+          fi
+
       - name: Install OpenTofu
         uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
         with:
