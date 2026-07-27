@@ -35,13 +35,24 @@ variable "apply_principal_arns" {
 }
 
 variable "hub_plan_role_arn" {
-  description = "ARN of the hub CI PLAN role permitted to sts:AssumeRole the plan (RO) deploy role. Leave null for an apply-only spoke (no PR plan role is created)."
+  description = "ARN of the hub CI PLAN role permitted to sts:AssumeRole the plan (RO) deploy role — the GHA PR-preview read path. Optional (default null): a spoke that only plans on a non-GHA executor sets plan_principal_arns instead. The plan role is created when either this or plan_principal_arns is set; omit both for an apply-only spoke."
   type        = string
   default     = null
 
   validation {
     condition     = var.hub_plan_role_arn == null || can(regex("^arn:aws:iam::[0-9]{12}:role/[^*]+$", coalesce(var.hub_plan_role_arn, "x")))
     error_message = "hub_plan_role_arn must be null or a concrete IAM role ARN with no wildcard."
+  }
+}
+
+variable "plan_principal_arns" {
+  description = "Additional concrete IAM principal ARNs trusted to sts:AssumeRole the plan (RO) deploy role, beyond hub_plan_role_arn. Use for a non-GHA executor — e.g. the CodeBuild plan and drift roles in the CodePipeline delivery model, whose in-pipeline Plan and Drift builds assume the plan role to produce/refresh the reviewed plan. A CodePipeline spoke sets this alongside hub_plan_role_arn (GHA still previews PRs) — the mirror of apply_principal_arns."
+  type        = list(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for arn in var.plan_principal_arns : can(regex("^arn:aws:iam::[0-9]{12}:role/[^*]+$", arn))])
+    error_message = "each plan_principal_arns entry must be a concrete IAM role ARN (arn:aws:iam::<account>:role/<name>) with no wildcard."
   }
 }
 
@@ -58,7 +69,7 @@ variable "apply_inline_policy" {
 }
 
 variable "plan_policy_arns" {
-  description = "Managed IAM policy ARNs attached to the plan (RO) deploy role. Only used when hub_plan_role_arn is set."
+  description = "Managed IAM policy ARNs attached to the plan (RO) deploy role. Only used when the plan role is created (hub_plan_role_arn and/or plan_principal_arns set)."
   type        = list(string)
   default     = []
 }
@@ -103,7 +114,7 @@ variable "managed_role_boundary" {
 }
 
 variable "plan_inline_policy" {
-  description = "Optional inline IAM policy JSON for the plan (RO) deploy role. Only used when hub_plan_role_arn is set."
+  description = "Optional inline IAM policy JSON for the plan (RO) deploy role. Only used when the plan role is created (hub_plan_role_arn and/or plan_principal_arns set)."
   type        = string
   default     = null
 }

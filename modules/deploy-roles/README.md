@@ -9,13 +9,15 @@ infrastructure:
   additional principals for a non-GHA executor (e.g. a CodeBuild apply role in the CodePipeline
   delivery model). At least one is required; a CodePipeline spoke trusts its CodeBuild role and sets
   `hub_apply_role_arn = null` to retire the GHA apply path.
-- **plan (RO, optional)** — assumable ONLY by the hub CI *plan* role (PR runs): the read path
-  for PR plan previews. Omit `hub_plan_role_arn` for an apply-only spoke.
+- **plan (RO, optional)** — the read path, assumable by the spoke's plan principal(s): the hub CI
+  *plan* role (PR previews) and/or additional principals for a non-GHA executor (e.g. the CodeBuild
+  plan + drift roles in the CodePipeline model). Omit both for an apply-only spoke.
 
 The standardized, security-critical part is the **trust**: every trusted principal is a concrete
 ARN (no wildcard, no cross-trust between the plan and apply paths) for `sts:AssumeRole` +
 `sts:TagSession`. The apply role trusts its apply-principal set (`hub_apply_role_arn` and/or
-`apply_principal_arns`, at least one required); the plan role trusts EXACTLY the hub plan role. The
+`apply_principal_arns`, at least one required); the plan role trusts its plan-principal set
+(`hub_plan_role_arn` and/or `plan_principal_arns`). The
 spoke supplies its own permissions (`*_policy_arns` / `*_inline_policy`);
 the apply role needs at least one of `apply_policy_arns` / `apply_inline_policy`. The two role
 names are the rendered org label plus a **literal** role-type suffix — `ck-<domain>-<name>-apply`
@@ -145,11 +147,12 @@ No modules.
 | <a name="input_attributes"></a> [attributes](#input\_attributes) | Optional `attributes` slot. null/unset inherits the provider base; "" suppresses it here; a value overrides. | `string` | `null` | no |
 | <a name="input_environment"></a> [environment](#input\_environment) | Optional `environment` slot. null/unset inherits the provider base; "" suppresses it here; a value overrides. | `string` | `null` | no |
 | <a name="input_hub_apply_role_arn"></a> [hub\_apply\_role\_arn](#input\_hub\_apply\_role\_arn) | ARN of the hub CI APPLY role (in the tooling account) permitted to sts:AssumeRole the apply (RW) deploy role — the GHA gated write path (the hub apply role is itself assumable only from the spoke's protected GitHub Environment). Optional (default null): a spoke on a non-GHA executor sets apply\_principal\_arns instead and leaves this null. At least one apply principal (this or apply\_principal\_arns) is required. | `string` | `null` | no |
-| <a name="input_hub_plan_role_arn"></a> [hub\_plan\_role\_arn](#input\_hub\_plan\_role\_arn) | ARN of the hub CI PLAN role permitted to sts:AssumeRole the plan (RO) deploy role. Leave null for an apply-only spoke (no PR plan role is created). | `string` | `null` | no |
+| <a name="input_hub_plan_role_arn"></a> [hub\_plan\_role\_arn](#input\_hub\_plan\_role\_arn) | ARN of the hub CI PLAN role permitted to sts:AssumeRole the plan (RO) deploy role — the GHA PR-preview read path. Optional (default null): a spoke that only plans on a non-GHA executor sets plan\_principal\_arns instead. The plan role is created when either this or plan\_principal\_arns is set; omit both for an apply-only spoke. | `string` | `null` | no |
 | <a name="input_managed_role_boundary"></a> [managed\_role\_boundary](#input\_managed\_role\_boundary) | Opt-in privilege-escalation guard for a spoke whose apply role MINTS IAM roles. Set it and the<br/>module creates a permissions-boundary policy from `policy_document` and generates the entire<br/>role-management grant itself, so the spoke never hand-writes one: every widening action<br/>(CreateRole/PutRolePolicy/AttachRolePolicy/...) is conditioned on the minted role carrying THAT<br/>boundary, the boundary can never be detached, the boundary policy can never be rewritten, and<br/>the deploy roles are explicitly denied to themselves. `role_arn_patterns` are the roles the<br/>apply role may manage — they MUST NOT match the deploy roles' own ARNs (the module denies that<br/>regardless, but a pattern that overlaps them is a design smell). Leave null for a spoke whose<br/>apply role mints no roles. | <pre>object({<br/>    policy_document   = string<br/>    role_arn_patterns = list(string)<br/>  })</pre> | `null` | no |
 | <a name="input_name"></a> [name](#input\_name) | The `name` slot for the roles. Defaults to "deploy" (ck-<domain>-deploy-apply / -plan); override per spoke. | `string` | `"deploy"` | no |
-| <a name="input_plan_inline_policy"></a> [plan\_inline\_policy](#input\_plan\_inline\_policy) | Optional inline IAM policy JSON for the plan (RO) deploy role. Only used when hub\_plan\_role\_arn is set. | `string` | `null` | no |
-| <a name="input_plan_policy_arns"></a> [plan\_policy\_arns](#input\_plan\_policy\_arns) | Managed IAM policy ARNs attached to the plan (RO) deploy role. Only used when hub\_plan\_role\_arn is set. | `list(string)` | `[]` | no |
+| <a name="input_plan_inline_policy"></a> [plan\_inline\_policy](#input\_plan\_inline\_policy) | Optional inline IAM policy JSON for the plan (RO) deploy role. Only used when the plan role is created (hub\_plan\_role\_arn and/or plan\_principal\_arns set). | `string` | `null` | no |
+| <a name="input_plan_policy_arns"></a> [plan\_policy\_arns](#input\_plan\_policy\_arns) | Managed IAM policy ARNs attached to the plan (RO) deploy role. Only used when the plan role is created (hub\_plan\_role\_arn and/or plan\_principal\_arns set). | `list(string)` | `[]` | no |
+| <a name="input_plan_principal_arns"></a> [plan\_principal\_arns](#input\_plan\_principal\_arns) | Additional concrete IAM principal ARNs trusted to sts:AssumeRole the plan (RO) deploy role, beyond hub\_plan\_role\_arn. Use for a non-GHA executor — e.g. the CodeBuild plan and drift roles in the CodePipeline delivery model, whose in-pipeline Plan and Drift builds assume the plan role to produce/refresh the reviewed plan. A CodePipeline spoke sets this alongside hub\_plan\_role\_arn (GHA still previews PRs) — the mirror of apply\_principal\_arns. | `list(string)` | `[]` | no |
 | <a name="input_surface"></a> [surface](#input\_surface) | Optional `surface` slot. null/unset inherits the provider base; "" suppresses it here; a value overrides. | `string` | `null` | no |
 
 ## Outputs

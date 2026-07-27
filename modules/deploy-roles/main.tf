@@ -3,17 +3,18 @@
 #   - apply (RW): the gated write path. Assumable by the spoke's apply principal(s) — the hub CI
 #     APPLY role (GitHub-Environment-gated), and/or additional principals for a non-GHA executor
 #     (e.g. a CodeBuild apply role in the CodePipeline delivery model). At least one is required.
-#   - plan  (RO, optional): assumable ONLY by the hub CI PLAN role (PR runs) -> the read path
-#     for PR plan previews. Omit (hub_plan_role_arn = null) for an apply-only spoke.
+#   - plan  (RO, optional): the read path. Assumable by the spoke's plan principal(s) — the hub CI
+#     PLAN role (PR previews), and/or additional principals for a non-GHA executor (e.g. the
+#     CodeBuild plan + drift roles in the CodePipeline model). Omit both for an apply-only spoke.
 #
 # The standardized, security-critical part is the TRUST: every trusted principal is a concrete ARN
-# (no wildcard), for sts:AssumeRole + sts:TagSession. The plan role trusts EXACTLY the hub plan role.
+# (no wildcard), for sts:AssumeRole + sts:TagSession. Each role trusts exactly its declared principal(s).
 # The spoke supplies its own permissions. The two role names append the role type to the shared
 # context render, so they are unique by construction: apply -> ck-<domain>-<name>-apply, plan ->
 # ck-<domain>-<name>-plan. The suffix is a literal (not a context slot) — the role-type distinction
 # isn't worth a tag; add one manually if ever needed.
 locals {
-  create_plan = var.hub_plan_role_arn != null
+  create_plan = var.hub_plan_role_arn != null || length(var.plan_principal_arns) > 0
   apply_name  = "${data.context_label.this.rendered}-apply"
   plan_name   = "${data.context_label.this.rendered}-plan"
 
@@ -24,6 +25,14 @@ locals {
   apply_trust_principals = distinct(concat(
     var.hub_apply_role_arn != null ? [var.hub_apply_role_arn] : [],
     var.apply_principal_arns,
+  ))
+
+  # The plan role's trusted principals, mirror of the apply side: the hub plan role (if set — GHA PR
+  # previews) plus any explicit plan_principal_arns. A CodePipeline spoke adds its CodeBuild plan and
+  # drift roles here so the in-pipeline Plan/Drift builds can assume the RO plan role directly.
+  plan_trust_principals = distinct(concat(
+    var.hub_plan_role_arn != null ? [var.hub_plan_role_arn] : [],
+    var.plan_principal_arns,
   ))
 
   manage_roles  = var.managed_role_boundary != null
@@ -51,7 +60,7 @@ locals {
   apply_inline_json = local.manage_roles ? data.aws_iam_policy_document.apply_combined[0].json : var.apply_inline_policy
 }
 
-# --- trust: the apply role trusts its apply principal(s); the plan role trusts its hub CI plan role
+# --- trust: the apply role trusts its apply principal(s); the plan role trusts its plan principal(s)
 # (regular IAM principals that themselves entered via OIDC, or a CodeBuild service role).
 # sts:TagSession because configure-aws-credentials tags sessions. A trusted principal need not exist
 # when these roles are created (IAM validates the ARN syntactically, not existentially) — but it must
@@ -77,7 +86,7 @@ data "aws_iam_policy_document" "plan_trust" {
 
     principals {
       type        = "AWS"
-      identifiers = [var.hub_plan_role_arn]
+      identifiers = local.plan_trust_principals
     }
   }
 }
