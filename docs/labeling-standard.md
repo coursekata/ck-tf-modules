@@ -30,7 +30,7 @@ provider "context" {
   # Per-repo — set the slots this repo populates:
   values = {
     namespace = "ck"
-    domain    = "tooling" # tooling | org | datalake | app | canvas
+    domain    = "tooling" # tooling | org | datalake | app | canvas | content
     # environment / surface — set only by multi-env / multi-surface repos (e.g. ck-datalake)
   }
 }
@@ -83,7 +83,7 @@ terraform {
 | Slot | Meaning | Examples |
 |------|---------|----------|
 | `namespace` | org — always `ck`, always present (enforced) | `ck` |
-| `domain` | the product/system a repo owns | `org`, `tooling`, `datalake`, `app`, `canvas` |
+| `domain` | the product/system a repo owns | `org`, `tooling`, `datalake`, `app`, `canvas`, `content` |
 | `environment` | deploy environment; empty for a singleton | `stg`, `prd`, `dev`, `pr-1234` |
 | `surface` | within-domain subdivision; empty when the domain has one | data tiers `raw`/`staging`/`intermediate`/`marts`/`analytical` (datalake); interface surfaces `api`/`web`/`mobile` (app) |
 | `name` | the resource's primary identity within (domain, env, surface) | `tfstate`, `cloudtrail`, `deploy`, `app` (source system) |
