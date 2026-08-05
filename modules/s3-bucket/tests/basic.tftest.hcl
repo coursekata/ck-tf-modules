@@ -165,6 +165,10 @@ run "bare_bucket_omits_optional_resources" {
     error_message = "no bucket policy when tls_only is false and no additional policy is given"
   }
   assert {
+    condition     = output.policy_json == null
+    error_message = "policy_json must be null when no policy is built, not an empty document"
+  }
+  assert {
     condition     = length(aws_s3_bucket_ownership_controls.this) == 0
     error_message = "no ownership controls when object_ownership is null"
   }

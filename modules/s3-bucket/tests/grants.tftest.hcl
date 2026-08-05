@@ -90,6 +90,13 @@ run "grants_inject_the_bucket_arn_into_the_policy" {
     condition     = strcontains(data.aws_iam_policy_document.this[0].json, "DenyInsecureTransport")
     error_message = "the tls-only deny must remain alongside the grants"
   }
+  # policy_json carries the same rendered policy out to consumers, so a root can assert the scope
+  # of its own grants. Checked by decoding rather than by string match, because a consumer asserts
+  # against the parsed document.
+  assert {
+    condition     = contains([for s in jsondecode(output.policy_json).Statement : s.Sid], "AWSCloudTrailWrite")
+    error_message = "policy_json must expose the rendered policy, including each grant's statement"
+  }
 }
 
 # bucket_name_override: adopt a pre-existing externally-named bucket (the app's cross-account
