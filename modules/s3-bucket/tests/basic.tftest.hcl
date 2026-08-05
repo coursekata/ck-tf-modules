@@ -172,6 +172,38 @@ run "bare_bucket_omits_optional_resources" {
     condition     = length(aws_s3_bucket_ownership_controls.this) == 0
     error_message = "no ownership controls when object_ownership is null"
   }
+  assert {
+    condition     = length(aws_s3_bucket_cors_configuration.this) == 0
+    error_message = "a bucket must have no CORS surface unless a consumer asks for one"
+  }
+}
+
+# --- CORS: only browser uploads need it, so it is opt-in and exact ---
+run "cors_rules_render_only_what_was_asked_for" {
+  command = plan
+
+  variables {
+    name = "uploads"
+    cors_rules = [{
+      allowed_methods = ["PUT"]
+      allowed_origins = ["https://app.example.com"]
+    }]
+  }
+
+  assert {
+    condition     = length(aws_s3_bucket_cors_configuration.this) == 1
+    error_message = "a CORS configuration must exist when rules are supplied"
+  }
+
+  # Exact, not "contains": a rule that also admits GET or a second origin would still pass a
+  # containment check while widening who may script against the bucket directly.
+  assert {
+    condition = alltrue([
+      for r in one(aws_s3_bucket_cors_configuration.this).cors_rule :
+      r.allowed_methods == toset(["PUT"]) && r.allowed_origins == toset(["https://app.example.com"])
+    ])
+    error_message = "every CORS rule must allow exactly the methods and origins that were asked for"
+  }
 }
 
 # --- SSE-KMS path ---
