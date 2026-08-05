@@ -188,3 +188,20 @@ variable "grants" {
     error_message = "each grant must set exactly one of principal_service or principal_aws."
   }
 }
+
+# Browser uploads are the only reason a bucket needs this: a presigned PUT from a page is
+# cross-origin, and any content type outside the CORS-safelisted three triggers a preflight that
+# S3 answers only if the bucket carries a rule. Reads through a CDN never need it — the
+# distribution answers those. Empty by default, so a bucket has no CORS surface unless a
+# consumer states it needs one.
+variable "cors_rules" {
+  description = "CORS rules for the bucket itself, for browser uploads via presigned URLs. Reads served through CloudFront do not need this."
+  type = list(object({
+    allowed_methods = list(string)
+    allowed_origins = list(string)
+    allowed_headers = optional(list(string), ["*"])
+    expose_headers  = optional(list(string), [])
+    max_age_seconds = optional(number, 3600)
+  }))
+  default = []
+}
