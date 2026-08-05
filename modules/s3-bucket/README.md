@@ -141,4 +141,5 @@ No modules.
 | <a name="output_id"></a> [id](#output\_id) | Bucket name / id. |
 | <a name="output_kms_key_arn"></a> [kms\_key\_arn](#output\_kms\_key\_arn) | ARN of the bucket's created CMK (create\_kms), else null. Wire into an aws\_kms\_key\_policy to grant concrete principals, or reference for SSE-KMS-pinned writes. |
 | <a name="output_kms_key_id"></a> [kms\_key\_id](#output\_kms\_key\_id) | The created CMK's key id (null when create\_kms is false) — pass as aws\_kms\_key\_policy.key\_id to attach the key's policy. |
+| <a name="output_policy_json"></a> [policy\_json](#output\_policy\_json) | The rendered bucket policy, or null when none is built (tls\_only false and no grants). A grant's key scope is a security boundary, and it is otherwise invisible from outside the module — exposing it lets a consuming root assert its own grants in tofu test rather than trusting a plan diff. |
 <!-- END_TF_DOCS -->
