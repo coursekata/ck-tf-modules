@@ -21,6 +21,13 @@ resource "aws_s3_bucket" "tfstate" {
   # context_tags sets Name to the `name` value ("tfstate"); pin it to the full id instead —
   # the useful AWS convention (and what null-label did), so the Name tag is the bucket's name.
   tags = merge(data.context_tags.this.tags, { Name = data.context_label.this.rendered })
+
+  # A stray destroy or module removal must not tear the state bucket out from under the live
+  # state it holds (Terraform would strip its TLS/versioning/lifecycle protections first). A
+  # deliberate teardown removes this guard in its own commit.
+  lifecycle {
+    prevent_destroy = true
+  }
 }
 
 data "aws_iam_policy_document" "tls_only" {
