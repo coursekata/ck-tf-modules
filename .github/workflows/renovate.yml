@@ -1,0 +1,38 @@
+name: renovate
+
+on:
+  schedule:
+    - cron: "0 13 * * 1" # Mondays 06:00 America/Los_Angeles
+  workflow_dispatch:
+    inputs:
+      log_level:
+        description: "Renovate LOG_LEVEL"
+        required: false
+        type: string
+        default: "info"
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write # the dependency dashboard is an issue
+
+concurrency:
+  group: renovate
+  cancel-in-progress: false
+
+jobs:
+  renovate:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: renovatebot/github-action@e09d604f8f803bb527bd8321ed5be06c460b8682 # v46.2.2
+        with:
+          token: ${{ github.token }}
+        env:
+          RENOVATE_PLATFORM: github
+          RENOVATE_REPOSITORIES: ${{ github.repository }}
+          RENOVATE_ONBOARDING: "false"
+          RENOVATE_REQUIRE_CONFIG: "required"
+          LOG_LEVEL: ${{ inputs.log_level || 'info' }}
