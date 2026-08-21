@@ -1,0 +1,23 @@
+{
+  "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "extends": ["config:recommended"],
+  "timezone": "America/Los_Angeles",
+  "minimumReleaseAge": "7 days",
+  "enabledManagers": ["terraform", "pre-commit", "custom.regex"],
+  "pre-commit": {
+    "description": "Ships disabled; enabledManagers alone does not turn it on.",
+    "enabled": true
+  },
+  "major": {
+    "description": "Majors wait for a human on the dependency dashboard.",
+    "dependencyDashboardApproval": true
+  },
+  "packageRules": [
+    {
+      "description": "Pre-1.0: patches flow, a human bumps the minor.",
+      "matchPackageNames": ["cloudposse/context"],
+      "matchUpdateTypes": ["minor", "major"],
+      "enabled": false
+    }
+  ]
+}
