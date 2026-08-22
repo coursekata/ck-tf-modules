@@ -37,12 +37,36 @@ permissions:
 # a GITLEAKS_LICENSE secret for organization-owned repos, which this workflow cannot hold without
 # giving up being credential-free and plumbing a secret through every caller. It is also a
 # run-action, so it would not put gitleaks on PATH for the hook the `tofu` job runs.
-env:
-  GITLEAKS_VERSION: "8.30.1"
-  GITLEAKS_SHA256: "551f6fc83ea457d62a0d98237cbad105af8d557003051f41f3e7ca7b3f2470eb"
-
 jobs:
+  # Fails fast, by name, on the one thing this workflow needs from a caller that is not obvious
+  # from calling it: the gitleaks version comes from the caller's own hook rev, so a repo without
+  # that entry would otherwise die deep inside an install step. Resolving it once here also keeps
+  # the parse out of the two jobs that consume it.
+  preflight:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      gitleaks_version: ${{ steps.contract.outputs.gitleaks_version }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: Check the caller meets this workflow's contract
+        id: contract
+        run: |
+          fail() { echo "::error::$1"; exit 1; }
+
+          [ -f .pre-commit-config.yaml ] || fail \
+            "tf-quality.yml runs your hooks with prek, so it needs .pre-commit-config.yaml at the repo root. This repo has none."
+
+          ver=$(awk '/gitleaks\/gitleaks/{f=1} f&&/rev:/{gsub(/[v"]/,"",$2); print $2; exit}' .pre-commit-config.yaml)
+          [ -n "$ver" ] || fail \
+            "tf-quality.yml installs the gitleaks binary that the gitleaks-system hook resolves from PATH, and it takes the version from your .pre-commit-config.yaml so the two cannot drift. Add a 'repo: https://github.com/gitleaks/gitleaks' entry with a 'rev:' — see ck-tf-modules' own config for the shape."
+
+          echo "gitleaks_version=$ver" >> "$GITHUB_OUTPUT"
+          echo "contract ok — gitleaks $ver"
+
   tofu:
+    needs: [preflight]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -81,11 +105,17 @@ jobs:
         # The gitleaks-system hook resolves gitleaks from PATH (matching how every other tool in
         # this bar is provided); the golang-language variant would build it from source instead.
         run: |
-          curl -fsSLo /tmp/gitleaks.tgz \
-            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tgz" | sha256sum -c -
-          tar -xzf /tmp/gitleaks.tgz -C /tmp gitleaks
-          sudo install /tmp/gitleaks /usr/local/bin/gitleaks
+          # Version resolved by preflight from the hook's own rev, so this cannot drift from the
+          # hook that runs the binary. Checksum from the release, so neither needs recomputing.
+          ver="${{ needs.preflight.outputs.gitleaks_version }}"
+          tgz="gitleaks_${ver}_linux_x64.tar.gz"
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${ver}"
+          cd /tmp
+          curl -fsSLO "${base}/${tgz}"
+          curl -fsSLO "${base}/gitleaks_${ver}_checksums.txt"
+          grep " ${tgz}$" "gitleaks_${ver}_checksums.txt" | sha256sum -c -
+          tar -xzf "${tgz}" gitleaks
+          sudo install gitleaks /usr/local/bin/gitleaks
 
       - name: Run the quality bar
         uses: j178/prek-action@5337cb91e0fa35a7ff31b9ca345126d8bbbcdf16 # v2.0.6
@@ -101,6 +131,7 @@ jobs:
   # scan would call that repo clean. Confirmed false positives are suppressed per-finding in the
   # caller's .gitleaksignore (an auditable fingerprint), never by narrowing the scan.
   secrets:
+    needs: [preflight]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -109,11 +140,17 @@ jobs:
 
       - name: Install gitleaks
         run: |
-          curl -fsSLo /tmp/gitleaks.tgz \
-            "https://github.com/gitleaks/gitleaks/releases/download/v${GITLEAKS_VERSION}/gitleaks_${GITLEAKS_VERSION}_linux_x64.tar.gz"
-          echo "${GITLEAKS_SHA256}  /tmp/gitleaks.tgz" | sha256sum -c -
-          tar -xzf /tmp/gitleaks.tgz -C /tmp gitleaks
-          sudo install /tmp/gitleaks /usr/local/bin/gitleaks
+          # Version resolved by preflight from the hook's own rev, so this cannot drift from the
+          # hook that runs the binary. Checksum from the release, so neither needs recomputing.
+          ver="${{ needs.preflight.outputs.gitleaks_version }}"
+          tgz="gitleaks_${ver}_linux_x64.tar.gz"
+          base="https://github.com/gitleaks/gitleaks/releases/download/v${ver}"
+          cd /tmp
+          curl -fsSLO "${base}/${tgz}"
+          curl -fsSLO "${base}/gitleaks_${ver}_checksums.txt"
+          grep " ${tgz}$" "gitleaks_${ver}_checksums.txt" | sha256sum -c -
+          tar -xzf "${tgz}" gitleaks
+          sudo install gitleaks /usr/local/bin/gitleaks
 
       - name: Scan the full history for committed secrets
         # --verbose so a failure names the file, commit, rule and fingerprint. Without it the job
