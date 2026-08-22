@@ -1,0 +1,19 @@
+name: docs
+
+on:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: docs
+  cancel-in-progress: false
+
+jobs:
+  docs:
+    uses: ./.github/workflows/tf-docs.yml
+    with:
+      recursive: true
+      recursive-path: modules

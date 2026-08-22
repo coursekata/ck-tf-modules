@@ -1,7 +1,7 @@
 # CourseKata Shared IaC Library
 
 **The org's shared, versioned library of reusable IaC building blocks** — the OpenTofu
-modules, the reusable `tf-quality.yml` CI quality gate, and the `cloudposse/context`
+modules, the reusable `tf-quality.yml` CI quality gate and `tf-docs.yml` doc generator, and the `cloudposse/context`
 labeling standard. Everything here is *composed into* a consuming repo at a pinned version
 (`?ref=vX.Y.Z` / `@vX.Y.Z`), never deployed — the repo holds **no roots, no state, and no
 applies**.
@@ -87,8 +87,8 @@ SemVer spec leaves 0.x minor/patch meaning undefined; this convention matches Te
 
 ## Quality gate (`tf-quality.yml`)
 
-`pre-commit` (run via `prek`) and CI run fmt, validate, tflint, trivy, terraform-docs, `tofu
-test`, and a gitleaks secret scan on every change. Install the hooks once with `prek install`.
+`pre-commit` (run via `prek`) and CI run fmt, validate, tflint, trivy, `tofu test`, and a
+gitleaks secret scan on every change. Install the hooks once with `prek install`.
 
 CI additionally runs two gates that a pre-commit hook cannot express, because a hook only ever
 sees the staged diff: a **full-history committed-secret scan** (a secret committed and later
@@ -111,8 +111,34 @@ versions). Versions that must match CI are called out in `tf-quality.yml`.
 | [`tofu`](https://opentofu.org) | fmt, validate, and `tofu test` |
 | [`tflint`](https://github.com/terraform-linters/tflint) | lint |
 | [`trivy`](https://trivy.dev) | misconfiguration scanning |
-| [`terraform-docs`](https://terraform-docs.io) | generated input/output tables (table format differs by version — match the pin) |
 | [`gitleaks`](https://gitleaks.io) | secret detection |
 | [`prek`](https://github.com/j178/prek) | the hook runner itself |
 
-On macOS: `brew install opentofu tflint trivy terraform-docs gitleaks prek`.
+On macOS: `brew install opentofu tflint trivy gitleaks prek`.
+
+## Doc generation (`tf-docs.yml`)
+
+The terraform-docs tables are **generated, never gated**. A stale table is cosmetic, and checking
+it in CI cost an install, a version pin, a checksum, and every developer matching that version
+locally — for an artifact whose only failure mode is looking slightly out of date.
+
+`tf-docs.yml` is a separate `workflow_call` that regenerates and pushes. It is opt-in: a repo that
+wants rendered module docs calls it on merge to its default branch, and one that doesn't, doesn't.
+
+```yaml
+on:
+  push:
+    branches: [main]
+permissions:
+  contents: write
+jobs:
+  docs:
+    uses: coursekata/ck-tf-modules/.github/workflows/tf-docs.yml@vX.Y.Z
+    with:
+      recursive: true
+      recursive-path: modules
+```
+
+Formatting comes from the caller's `.terraform-docs.yml`, so that file stays the single source of
+what the tables look like. `tf-quality.yml` keeps `permissions: contents: read` — write access
+lives only here, in the workflow that needs it.
