@@ -1,0 +1,50 @@
+name: tf-docs
+
+# Regenerates the terraform-docs tables and pushes the result. Deliberately NOT part of
+# tf-quality.yml: a stale table is cosmetic, and gating on it cost an install, a version pin, a
+# checksum, and every developer matching that version locally. Generating instead of checking
+# removes all four. The gate stays read-only; write access lives here, where it is needed.
+#
+# Callers run this on merge to their default branch, not on pull requests, so it never pushes to
+# someone's branch mid-review. A GITHUB_TOKEN push does not retrigger workflows, so it cannot loop.
+
+on:
+  workflow_call:
+    inputs:
+      working-dir:
+        description: "Comma-separated directories to generate docs for."
+        required: false
+        type: string
+        default: "."
+      recursive:
+        description: "Recurse into subdirectories of recursive-path."
+        required: false
+        type: boolean
+        default: false
+      recursive-path:
+        description: "Directory to recurse into when recursive is true."
+        required: false
+        type: string
+        default: "modules"
+      config-file:
+        description: "terraform-docs config. Keep this the single source of formatting."
+        required: false
+        type: string
+        default: ".terraform-docs.yml"
+
+jobs:
+  docs:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    permissions:
+      contents: write # commits the regenerated tables
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - uses: terraform-docs/gh-actions@6de6da0cefcc6b4b7a5cbea4d79d97060733093c # v1.4.1
+        with:
+          working-dir: ${{ inputs.working-dir }}
+          recursive: ${{ inputs.recursive }}
+          recursive-path: ${{ inputs.recursive-path }}
+          config-file: ${{ inputs.config-file }}
+          git-push: true

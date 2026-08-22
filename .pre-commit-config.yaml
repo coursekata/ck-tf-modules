@@ -37,10 +37,6 @@ repos:
       - id: terraform_trivy
         args:
           - --hook-config=--tf-path=tofu
-      - id: terraform_docs
-        args:
-          - --hook-config=--tf-path=tofu
-          - --args=--config=.terraform-docs.yml
 
   - repo: local
     hooks:

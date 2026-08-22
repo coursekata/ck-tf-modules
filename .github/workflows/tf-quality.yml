@@ -76,17 +76,6 @@ jobs:
       - name: Install trivy
         uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
 
-      - name: Install terraform-docs
-        run: |
-          # No official install-only action exists (the gh-action is a Docker run-action that
-          # fights the prek model), so install the pinned binary with a checksum gate.
-          ver=v0.24.0
-          sha=9005daf969de0b50134493a2c00078b49f5f5b39d021cda7c89bf4d4f3d776d3
-          curl -fsSLo /tmp/tfdocs.tgz \
-            "https://github.com/terraform-docs/terraform-docs/releases/download/${ver}/terraform-docs-${ver}-linux-amd64.tar.gz"
-          echo "${sha}  /tmp/tfdocs.tgz" | sha256sum -c -
-          tar -xzf /tmp/tfdocs.tgz -C /tmp terraform-docs
-          sudo install /tmp/terraform-docs /usr/local/bin/terraform-docs
 
       - name: Install gitleaks
         # The gitleaks-system hook resolves gitleaks from PATH (matching how every other tool in
