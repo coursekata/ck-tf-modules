@@ -60,35 +60,3 @@ block identical.
 > `validation_regex`) is deliberate — it makes the `properties` output a cleanly-typed
 > `map(object(...))` that flows into the provider without type-coercion surprises. Verify
 > `init`/`validate`/a label render on the first root before rolling it out repo-wide.
-
-<!-- BEGIN_TF_DOCS -->
-## Requirements
-
-| Name | Version |
-| ---- | ------- |
-| <a name="requirement_terraform"></a> [terraform](#requirement\_terraform) | >= 1.11.6, < 2.0 |
-
-## Providers
-
-No providers.
-
-## Modules
-
-No modules.
-
-## Resources
-
-No resources.
-
-## Inputs
-
-No inputs.
-
-## Outputs
-
-| Name | Description |
-| ---- | ----------- |
-| <a name="output_properties"></a> [properties](#output\_properties) | The shared property schema (vocabulary + per-slot validation). Wire into provider "context" { properties = ... }. |
-| <a name="output_property_order"></a> [property\_order](#output\_property\_order) | Default render order for the context provider. Wire into provider "context" { property\_order = ... }. |
-| <a name="output_tags_value_case"></a> [tags\_value\_case](#output\_tags\_value\_case) | Org tag-value case policy (lower). Wire into provider "context" { tags\_value\_case = ... }. |
-<!-- END_TF_DOCS -->
