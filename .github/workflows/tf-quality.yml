@@ -118,7 +118,7 @@ jobs:
           sudo install gitleaks /usr/local/bin/gitleaks
 
       - name: Run the quality bar
-        uses: j178/prek-action@5337cb91e0fa35a7ff31b9ca345126d8bbbcdf16 # v2.0.6
+        uses: j178/prek-action@4e14d07f9231acabce116ccfca13b13dd9755ece # v3.0.0
         env:
           # tflint --init fetches plugin metadata from the GitHub API; anonymous is 60/hr shared
           # across the runner's IP. Ambient run token, not a secret a caller has to supply.
