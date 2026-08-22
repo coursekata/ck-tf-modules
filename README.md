@@ -1,7 +1,7 @@
 # CourseKata Shared IaC Library
 
 **The org's shared, versioned library of reusable IaC building blocks** — the OpenTofu
-modules, the reusable `tf-quality.yml` CI quality gate and `tf-docs.yml` doc generator, and the `cloudposse/context`
+modules, the reusable `tf-quality.yml` CI quality gate, and the `cloudposse/context`
 labeling standard. Everything here is *composed into* a consuming repo at a pinned version
 (`?ref=vX.Y.Z` / `@vX.Y.Z`), never deployed — the repo holds **no roots, no state, and no
 applies**.
@@ -36,7 +36,7 @@ Each module lives in `modules/<name>/` and contains:
 - **`variables.tf`** — input variables, with validations.
 - **`outputs.tf`** — values consumers wire into their config.
 - **`versions.tf`** — `required_version` and `required_providers` constraints.
-- **`README.md`** — usage notes plus the terraform-docs-generated input/output tables.
+- **`README.md`** — what the module is for, how to use it, and the reasoning behind its seams. The variable and output blocks are the interface; read those.
 - **`tests/`** — native `tofu test` suites (`*.tftest.hcl`).
 
 Modules configure **no provider** — the consuming root supplies it (and its `default_tags`).
@@ -115,30 +115,3 @@ versions). Versions that must match CI are called out in `tf-quality.yml`.
 | [`prek`](https://github.com/j178/prek) | the hook runner itself |
 
 On macOS: `brew install opentofu tflint trivy gitleaks prek`.
-
-## Doc generation (`tf-docs.yml`)
-
-The terraform-docs tables are **generated, never gated**. A stale table is cosmetic, and checking
-it in CI cost an install, a version pin, a checksum, and every developer matching that version
-locally — for an artifact whose only failure mode is looking slightly out of date.
-
-`tf-docs.yml` is a separate `workflow_call` that regenerates and pushes. It is opt-in: a repo that
-wants rendered module docs calls it on merge to its default branch, and one that doesn't, doesn't.
-
-```yaml
-on:
-  push:
-    branches: [main]
-permissions:
-  contents: write
-jobs:
-  docs:
-    uses: coursekata/ck-tf-modules/.github/workflows/tf-docs.yml@vX.Y.Z
-    with:
-      recursive: true
-      recursive-path: modules
-```
-
-Formatting comes from the caller's `.terraform-docs.yml`, so that file stays the single source of
-what the tables look like. `tf-quality.yml` keeps `permissions: contents: read` — write access
-lives only here, in the workflow that needs it.
