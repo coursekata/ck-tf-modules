@@ -15,6 +15,8 @@ permissions:
   contents: write
   pull-requests: write
   issues: write # the dependency dashboard is an issue
+  statuses: write # minimumReleaseAge is enforced as a branch status
+  security-events: read # Dependabot alerts
 
 concurrency:
   group: renovate
