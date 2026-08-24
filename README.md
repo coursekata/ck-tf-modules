@@ -1,7 +1,7 @@
 # CourseKata Shared IaC Library
 
 **The org's shared, versioned library of reusable IaC building blocks** — the OpenTofu
-modules, the reusable `tf-quality.yml` CI quality gate, and the `cloudposse/context`
+modules, the reusable `tf-quality.yml` CI quality gate and `tf-renovate.yml` updater, and the `cloudposse/context`
 labeling standard. Everything here is *composed into* a consuming repo at a pinned version
 (`?ref=vX.Y.Z` / `@vX.Y.Z`), never deployed — the repo holds **no roots, no state, and no
 applies**.
@@ -115,3 +115,47 @@ versions). Versions that must match CI are called out in `tf-quality.yml`.
 | [`prek`](https://github.com/j178/prek) | the hook runner itself |
 
 On macOS: `brew install opentofu tflint trivy gitleaks prek`.
+
+## Dependency updates (`tf-renovate.yml` + `renovate/default.json`)
+
+Renovate runs per repo, from one implementation. A consumer calls the reusable workflow at a pinned
+tag and extends the shared preset:
+
+```yaml
+# .github/workflows/renovate.yml
+on:
+  schedule: [{ cron: "0 13 * * 1" }]
+  workflow_dispatch:
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+  statuses: write
+jobs:
+  renovate:
+    uses: coursekata/ck-tf-modules/.github/workflows/tf-renovate.yml@vX.Y.Z
+```
+
+```json
+// renovate.json
+{ "extends": ["github>coursekata/ck-tf-modules//renovate/default.json"] }
+```
+
+Repo-specific rules sit alongside the `extends` — a custom manager for a version string that lives
+outside any manifest, for instance.
+
+**The workflow is pinned, the preset is not, and that split is deliberate.** A workflow executes
+code, so it is pinned by tag and Dependabot moves the pin. The preset is declarative policy that
+executes nothing, so it resolves from `main` and a change reaches the whole fleet at once — which is
+the point of having one.
+
+**It runs on each caller's own `GITHUB_TOKEN`**, not a central App. Pull requests authored that way
+arrive with their CI held for a human to release; an App would fire those runs immediately, and no
+App-side setting restores the gate. `statuses: write` is not optional — `minimumReleaseAge` is
+enforced as a branch status, and without it Renovate creates the branch, fails silently, and reports
+"Repository has changed during renovation" without ever opening the pull request.
+
+Two things a repo-scoped token cannot do, which is why they are configured the way they are: it
+cannot write under `.github/workflows`, so the `github-actions` manager stays off and Dependabot
+keeps that ecosystem; and it cannot read Dependabot alerts, so vulnerability alerts surface through
+Dependabot and CI's dependency gate rather than through Renovate.
