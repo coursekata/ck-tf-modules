@@ -1,15 +1,9 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
-  "extends": [
-    "config:recommended"
-  ],
+  "extends": ["config:recommended"],
   "timezone": "America/Los_Angeles",
   "minimumReleaseAge": "7 days",
-  "enabledManagers": [
-    "terraform",
-    "pre-commit",
-    "custom.regex"
-  ],
+  "enabledManagers": ["terraform", "pre-commit", "custom.regex"],
   "pre-commit": {
     "description": "Ships disabled; enabledManagers alone does not turn it on.",
     "enabled": true
@@ -20,15 +14,10 @@
   },
   "packageRules": [
     {
-      "description": "Pre-1.0: patches flow, a human bumps the minor.",
-      "matchPackageNames": [
-        "cloudposse/context"
-      ],
-      "matchUpdateTypes": [
-        "minor",
-        "major"
-      ],
-      "enabled": false
+      "description": "Pre-1.0 minors can break, and Renovate still classes them minor, so the major gate above misses them. Not enabled:false — that is evaluated before updateType exists, so pairing it with matchUpdateTypes silently never matches.",
+      "matchCurrentValue": "/^v?0\\./",
+      "matchUpdateTypes": ["minor", "major"],
+      "dependencyDashboardApproval": true
     }
   ]
 }
