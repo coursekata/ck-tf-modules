@@ -130,6 +130,29 @@ jobs:
   # committed and later deleted is still disclosed to anyone who can clone, so a working-tree
   # scan would call that repo clean. Confirmed false positives are suppressed per-finding in the
   # caller's .gitleaksignore (an auditable fingerprint), never by narrowing the scan.
+  # var.testing configures the aws provider offline (dummy creds, skipped STS) so a root plans
+  # without credentials. Shipped enabled it would disarm the account-guard preamble, whose whole job
+  # is to fail a plan run under the wrong credential — it would fail open, silently. Scans the whole
+  # repo rather than named directories so it works in a modules repo with no environments/ tree; a
+  # repo with no var.testing passes trivially, the same way the dependency-CVE gate does.
+  testing-guard:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+
+      - name: var.testing must never ship enabled
+        run: |
+          hits=$(grep -rEn --include='*.tf' --include='*.tfvars' \
+                   'testing[[:space:]]*=[[:space:]]*true' . \
+                 | grep -v '/tests/' | grep -v '/\.terraform/' || true)
+          if [ -n "$hits" ]; then
+            echo "$hits"
+            echo "::error::var.testing must never be true in committed config — it weakens the provider and disarms account-guard. Tests set it in tests/ only."
+            exit 1
+          fi
+          echo "no committed testing=true"
+
   secrets:
     needs: [preflight]
     runs-on: ubuntu-latest
