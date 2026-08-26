@@ -5,7 +5,9 @@ name: renovate
 
 on:
   schedule:
-    - cron: "0 13 * * 1" # Mondays 06:00 America/Los_Angeles
+    # Nightly, not weekly: minimumReleaseAge already holds every release for 7 days, so a weekly
+    # cron would add a second, arbitrary wait of up to 6 more days on top of the deliberate one.
+    - cron: "0 13 * * *" # daily 06:00 America/Los_Angeles
   workflow_dispatch:
     inputs:
       log_level:
