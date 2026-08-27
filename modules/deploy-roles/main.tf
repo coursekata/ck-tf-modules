@@ -62,9 +62,11 @@ locals {
 
 # --- trust: the apply role trusts its apply principal(s); the plan role trusts its plan principal(s)
 # (regular IAM principals that themselves entered via OIDC, or a CodeBuild service role).
-# sts:TagSession because configure-aws-credentials tags sessions. A trusted principal need not exist
-# when these roles are created (IAM validates the ARN syntactically, not existentially) — but it must
-# land before an assume succeeds. ---
+# sts:TagSession because configure-aws-credentials tags sessions. Every trusted principal must already
+# exist when these roles are created: IAM resolves a role-ARN principal to its unique ID at save time and
+# rejects the policy otherwise, so the hub and pipeline roles are applied first. That resolution also makes
+# trust brittle across recreation — deleting and recreating a trusted role leaves the stale unique ID here
+# and every assume fails until this policy is rewritten. ---
 data "aws_iam_policy_document" "apply_trust" {
   statement {
     effect  = "Allow"
