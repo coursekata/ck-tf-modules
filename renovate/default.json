@@ -24,6 +24,12 @@
       "matchUpdateTypes": ["minor", "major"],
       "groupName": null,
       "dependencyDashboardApproval": true
+    },
+    {
+      "description": "renovatebot/pre-commit-hooks publishes several releases a day, so something has always just cleared the seven-day soak and there is permanently an open pull request for it — merging faster never catches up. The hook only validates a Renovate config file, so nothing downstream needs it current to the hour; it batches monthly instead. Ungrouped so the schedule applies to it rather than to whatever else shares its group.",
+      "matchPackageNames": ["renovatebot/pre-commit-hooks"],
+      "groupName": null,
+      "schedule": ["* * 1 * *"]
     }
   ]
 }

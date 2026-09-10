@@ -1,4 +1,5 @@
 {
   "$schema": "https://docs.renovatebot.com/renovate-schema.json",
+  "description": "Runs as the hosted Renovate App, unlike the spokes that extend this same preset. Those keep the self-hosted workflow because a bot pull request there would auto-run a credentialed plan - ck-services/plan.yml triggers on pull_request and holds id-token: write. This repo has no such workflow: tf-quality.yml is credential-free by design, so the token restriction bought nothing here while costing the CI run that the protect-main ruleset requires. Under GITHUB_TOKEN a Renovate pull request triggers no workflow, so ci-passed never reported and its pull requests could never merge. Do not reinstate .github/workflows/renovate.yml here; tf-renovate.yml stays, because the spokes call it.",
   "extends": ["github>coursekata/ck-tf-modules//renovate/default.json"]
 }
