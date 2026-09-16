@@ -99,7 +99,42 @@ The same checks are packaged as the reusable **[`tf-quality.yml`](.github/workfl
 `workflow_call` — credential-free and repo-agnostic. This repo calls it locally; every other IaC
 repo calls it remotely at a pinned tag (`uses: coursekata/ck-tf-modules/.github/workflows/tf-quality.yml@vX.Y.Z`),
 so the org bar is defined once and `prek` keeps remote CI in parity with local pre-commit for the
-hook-expressible checks. Bump a tool version here and all consumers inherit it.
+hook-expressible checks. Consumers receive workflow changes when they update their pinned tag.
+
+The workflow shares an OpenTofu provider cache across roots and saves it between CI runs.
+The cache key includes the platform, OpenTofu version, committed provider lockfiles, and
+`versions.tf` files. Provider checksum verification stays enabled; the cache contains no
+backend metadata. Roots without committed lockfiles may still download providers to establish
+their checksums. Successful hook output and durations are visible in the CI log.
+
+### Shared test hook
+
+This repo exports `tofu-test` through `.pre-commit-hooks.yaml`. Consumers can replace their
+local `tofu-test` hook with this entry, setting `rev` to a release containing the hook:
+
+```yaml
+- repo: https://github.com/coursekata/ck-tf-modules
+  rev: <released-tag>
+  hooks:
+    - id: tofu-test
+```
+
+Remove the old local hook when adopting this one so tests run once. Updating the reusable
+workflow alone does not replace a consumer's local test script.
+
+The hook finds and deduplicates the nearest `tests/*.tftest.hcl` root for each selected path.
+CI selects all tracked files; local commits select staged files. This is path-based selection,
+not dependency analysis: a local module edit does not automatically select its callers.
+The hook initializes roots serially with `-backend=false`, then uses the standard `xargs` worker pool to test up to two roots at once.
+Set `TOFU_TEST_JOBS=1` for serial execution or another positive integer to change the limit.
+Setup and test durations are printed separately for each root. Initialization failures fail
+the hook, and failures in one root do not prevent the remaining roots from being checked.
+
+Runner regression tests use a fake `tofu` executable and need no providers or AWS access:
+
+```sh
+python3 -m unittest discover -s scripts/tests -v
+```
 
 ### Local prerequisites
 

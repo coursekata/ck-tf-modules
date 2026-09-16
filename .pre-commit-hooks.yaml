@@ -1,0 +1,8 @@
+- id: tofu-test
+  name: tofu test (selected modules/envs)
+  description: Initialize and test selected roots, with timings and bounded parallelism.
+  entry: scripts/tofu-test-changed.sh
+  language: script
+  files: \.(tf|tftest\.hcl)$
+  exclude: (^|/)(\.terraform|dbt_packages|target)/
+  require_serial: true

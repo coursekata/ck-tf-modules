@@ -88,6 +88,21 @@ jobs:
             exit 1
           fi
 
+      - name: Create the shared provider cache
+        run: |
+          mkdir -p "$RUNNER_TEMP/tofu-provider-cache"
+          echo "TF_PLUGIN_CACHE_DIR=$RUNNER_TEMP/tofu-provider-cache" >> "$GITHUB_ENV"
+
+      # Cache providers only, never backend metadata or per-root .terraform directories.
+      # Keep normal lockfile checksum verification enabled on cache hits.
+      - name: Restore and save OpenTofu providers
+        uses: actions/cache@caa296126883cff596d87d8935842f9db880ef25 # v5
+        with:
+          path: ${{ runner.temp }}/tofu-provider-cache
+          key: tofu-providers-v1-${{ runner.os }}-${{ runner.arch }}-${{ inputs.tofu_version }}-${{ hashFiles('**/.terraform.lock.hcl', '**/versions.tf') }}
+          restore-keys: |
+            tofu-providers-v1-${{ runner.os }}-${{ runner.arch }}-${{ inputs.tofu_version }}-
+
       - name: Install OpenTofu
         uses: opentofu/setup-opentofu@a1320f892987e89d278cc92dc5adc984fb93aca4 # v2.0.2
         with:
@@ -124,7 +139,7 @@ jobs:
           # across the runner's IP. Ambient run token, not a secret a caller has to supply.
           GITHUB_TOKEN: ${{ github.token }}
         with:
-          extra-args: --all-files
+          extra-args: --all-files --verbose
 
   # The committed-secret gate. Scans the whole commit graph, not the tip: a secret that was
   # committed and later deleted is still disclosed to anyone who can clone, so a working-tree

@@ -46,12 +46,19 @@ repos:
   - repo: local
     hooks:
       - id: tofu-test
-        name: tofu test (changed modules)
+        name: tofu test (selected modules)
         entry: scripts/tofu-test-changed.sh
         language: script
         files: \.(tf|tftest\.hcl)$
         exclude: (^|/)\.terraform/
         require_serial: true
+
+      - id: tofu-test-runner-tests
+        name: tofu test runner regression tests
+        entry: python3 -m unittest discover -s scripts/tests -v
+        language: system
+        files: ^(scripts/tofu-test-changed\.sh|scripts/tests/.*\.py|\.pre-commit-hooks\.yaml)$
+        pass_filenames: false
 
       - id: context-shared
         name: context.tf is byte-identical across modules
