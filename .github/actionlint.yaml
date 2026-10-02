@@ -1,4 +1,0 @@
-paths:
-  .github/workflows/ecr-promote-image.yml:
-    ignore:
-      - 'specifying action "\$/.+" in invalid format because ref is missing'
