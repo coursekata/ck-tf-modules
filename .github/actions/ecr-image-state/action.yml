@@ -1,0 +1,70 @@
+name: Locate immutable ECR image
+description: Decide whether a content tag is released, staged as a candidate, or needs building.
+
+inputs:
+  release_repository:
+    description: ECR repository containing immutable released images.
+    required: true
+  candidate_repository:
+    description: ECR repository containing immutable pull-request candidates.
+    required: true
+  tag:
+    description: Immutable content tag to locate.
+    required: true
+
+outputs:
+  build:
+    description: Whether the caller must build and publish a candidate.
+    value: ${{ steps.locate.outputs.build }}
+  from_candidate:
+    description: Whether a consumer must resolve the tag from the candidate repository.
+    value: ${{ steps.locate.outputs.from_candidate }}
+
+runs:
+  using: composite
+  steps:
+    - name: Report AWS CLI version
+      shell: bash
+      run: aws --version
+
+    - name: Locate immutable content tag
+      id: locate
+      shell: bash
+      env:
+        CANDIDATE_REPOSITORY: ${{ inputs.candidate_repository }}
+        RELEASE_REPOSITORY: ${{ inputs.release_repository }}
+        TAG: ${{ inputs.tag }}
+      run: |
+        set -euo pipefail
+
+        present() {
+          local error
+          if error=$(aws ecr describe-images --no-cli-pager \
+            --repository-name "$1" --image-ids imageTag="$2" 2>&1 >/dev/null); then
+            return 0
+          fi
+          case "$error" in
+            *ImageNotFoundException*) return 1 ;;
+            *) echo "::error::$error"; return 2 ;;
+          esac
+        }
+
+        if present "$RELEASE_REPOSITORY" "$TAG"; then
+          echo "build=false" >> "$GITHUB_OUTPUT"
+          echo "from_candidate=false" >> "$GITHUB_OUTPUT"
+          echo "$RELEASE_REPOSITORY:$TAG is already released." >> "$GITHUB_STEP_SUMMARY"
+          exit 0
+        else
+          status=$?
+          [ "$status" -eq 1 ] || exit "$status"
+        fi
+
+        echo "from_candidate=true" >> "$GITHUB_OUTPUT"
+        if present "$CANDIDATE_REPOSITORY" "$TAG"; then
+          echo "build=false" >> "$GITHUB_OUTPUT"
+          echo "$CANDIDATE_REPOSITORY:$TAG is already staged." >> "$GITHUB_STEP_SUMMARY"
+        else
+          status=$?
+          [ "$status" -eq 1 ] || exit "$status"
+          echo "build=true" >> "$GITHUB_OUTPUT"
+        fi

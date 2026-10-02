@@ -1,0 +1,51 @@
+name: Git content ID
+description: Resolve one or more Git paths to a content ID that survives merge-commit changes.
+
+inputs:
+  paths:
+    description: Newline-separated repository paths whose Git object IDs define the image input.
+    required: true
+
+outputs:
+  tag:
+    description: A Git object ID for one path, or a SHA-256 over the ordered object IDs for several paths.
+    value: ${{ steps.resolve.outputs.tag }}
+
+runs:
+  using: composite
+  steps:
+    - name: Report Git version
+      shell: bash
+      run: git --version
+
+    - name: Resolve content ID
+      id: resolve
+      shell: bash
+      env:
+        CONTENT_PATHS: ${{ inputs.paths }}
+      run: |
+        set -euo pipefail
+
+        objects=()
+        while IFS= read -r path; do
+          [ -n "$path" ] || continue
+          if [[ ! "$path" =~ ^[A-Za-z0-9._/-]+$ ]] || [[ "$path" = /* ]] || [[ "$path" = *..* ]]; then
+            echo "::error::Invalid content path: $path"
+            exit 1
+          fi
+          objects+=("$(git rev-parse "HEAD:$path")")
+        done <<< "$CONTENT_PATHS"
+
+        if [ "${#objects[@]}" -eq 0 ]; then
+          echo "::error::At least one content path is required."
+          exit 1
+        fi
+
+        if [ "${#objects[@]}" -eq 1 ]; then
+          tag="${objects[0]}"
+        else
+          tag=$(printf '%s\n' "${objects[@]}" | sha256sum | cut -d ' ' -f 1)
+        fi
+
+        echo "tag=$tag" >> "$GITHUB_OUTPUT"
+        echo "Image content ID: \`$tag\`" >> "$GITHUB_STEP_SUMMARY"
