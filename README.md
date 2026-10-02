@@ -1,21 +1,19 @@
 # CourseKata Shared IaC Library
 
-**The org's shared, versioned library of reusable IaC building blocks** — the OpenTofu
-modules, the reusable `tf-quality.yml` CI quality gate and `tf-renovate.yml` updater, and the `cloudposse/context`
-labeling standard. Everything here is *composed into* a consuming repo at a pinned version
+**The org's shared, versioned library of reusable infrastructure and delivery building blocks** —
+OpenTofu modules, reusable CI workflows and actions, and the `cloudposse/context` labeling standard.
+Everything here is *composed into* a consuming repo at a pinned version
 (`?ref=vX.Y.Z` / `@vX.Y.Z`), never deployed — the repo holds **no roots, no state, and no
 applies**.
 
 It is the **dependency root** of the org's IaC: every other repo (`ck-tooling`,
-`ck-foundation`, `ck-datalake`, …) pins *into* it, it pins out at nothing, and it even lints
-itself with its own quality gate. It is **public** so consumers fetch modules and call its CI
-workflow with no token, and its `v*` tags are frozen immutable. It is a *sibling* of the
-`ck-tooling` control plane, not part of it — the **repo-agnostic, credential-free** quality
-bar lives here; the **AWS/OIDC-coupled** delivery gate (`tf-delivery.yml`) lives in
-`ck-tooling`.
+`ck-foundation`, `ck-datalake`, …) pins *into* it, and it even lints itself with its own quality
+gate. It is **public** so consumers fetch modules and call its workflows and actions with no token,
+and its `v*` tags are frozen immutable. It is a sibling of the `ck-tooling` control plane: reusable
+mechanisms live here, while account-specific delivery orchestration lives in `ck-tooling`.
 
-> **Where does a shared thing go?** Repo-agnostic and consumed by everyone → here.
-> Coupled to AWS or the apply-gate → `ck-tooling`.
+> **Where does a shared thing go?** Versioned modules and reusable CI mechanisms consumed across
+> repositories live here. Account-specific orchestration and the apply gate live in `ck-tooling`.
 
 ## Modules
 
@@ -24,6 +22,8 @@ bar lives here; the **AWS/OIDC-coupled** delivery gate (`tf-delivery.yml`) lives
 | [`account-guard`](modules/account-guard) | Root-preamble guard: asserts the running credential resolves to the expected account and fails the plan otherwise. Every root calls it once per provider. |
 | [`context-schema`](modules/context-schema) | Outputs-only module emitting the org labeling schema (property order, slots, tag-case) that each root's `cloudposse/context` provider is configured from. |
 | [`deploy-roles`](modules/deploy-roles) | Spoke plan (RO) + apply (RW) IAM roles for the OIDC hub-spoke delivery model — standardized trust, caller-supplied permissions. |
+| [`ecr-image-ci`](modules/ecr-image-ci) | GitHub OIDC roles for candidate staging and exact-digest promotion, with live permission-boundary checks. |
+| [`ecr-repo`](modules/ecr-repo) | Immutable ECR repository with candidate-age or release-count retention. |
 | [`log-group`](modules/log-group) | CloudWatch Logs log-group primitive — context-rendered name/tags, an optional AWS-mandated source prefix, and a caller-chosen retention. The logging sibling of `s3-bucket`. |
 | [`s3-bucket`](modules/s3-bucket) | Hardened, durable S3 bucket archetype for security/audit buckets, with a generic ARN-free `grants` seam for service-delivery policies. |
 | [`state-backend`](modules/state-backend) | Hardened S3 bucket backing an OpenTofu root's state via the native S3 lockfile (no DynamoDB). |
@@ -100,6 +100,13 @@ The same checks are packaged as the reusable **[`tf-quality.yml`](.github/workfl
 repo calls it remotely at a pinned tag (`uses: coursekata/ck-tf-modules/.github/workflows/tf-quality.yml@vX.Y.Z`),
 so the org bar is defined once and `prek` keeps remote CI in parity with local pre-commit for the
 hook-expressible checks. Bump a tool version here and all consumers inherit it.
+
+## Image delivery
+
+[`docs/image-delivery.md`](docs/image-delivery.md) describes the shared two-repository image lane,
+including its Terraform modules, content-ID and image-state actions, and exact-digest promotion
+workflow. Consumers keep their application-specific build and runtime checks and pin these shared
+components at a released tag.
 
 ### Local prerequisites
 

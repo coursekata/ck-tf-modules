@@ -1,0 +1,11 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+expected="buildx imagetools create --prefer-index=false --tag registry/release:content-id registry/candidate@sha256:candidate"
+if [ "$*" != "$expected" ]; then
+  echo "unexpected docker invocation: $*" >&2
+  exit 2
+fi
+
+echo "$*" > "$TEST_STATE/docker-command"
+touch "$TEST_STATE/promoted"
