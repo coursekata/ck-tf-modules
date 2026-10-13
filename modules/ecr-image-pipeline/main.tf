@@ -1,0 +1,263 @@
+locals {
+  areas = ["candidate", "release", "cache"]
+
+  # One candidate, release and cache repository per image, keyed <image>/<area>.
+  repositories = {
+    for pair in setproduct(var.images, local.areas) :
+    "${pair[0]}/${pair[1]}" => { image = pair[0], area = pair[1] }
+  }
+
+  # A candidate lives until its run's release, which a re-run can repeat for up to
+  # 30 days. A released cache is imported only in its own epoch month, and one the
+  # month's tag has moved off waits out the same expiry, since ECR counts from the
+  # push. Released images never expire, since a deployment may still name their
+  # digest.
+  expire_after_days = { candidate = 30, cache = 62 }
+
+  subjects = {
+    candidate    = "repo:${var.github_repository}:ref:refs/heads/${var.default_branch}"
+    "cache-read" = "repo:${var.github_repository}:pull_request"
+    release      = "repo:${var.github_repository}:environment:release"
+  }
+
+  pull_actions = [
+    "ecr:BatchCheckLayerAvailability",
+    "ecr:BatchGetImage",
+    "ecr:DescribeImages",
+    "ecr:GetDownloadUrlForLayer",
+    "ecr:ListImages",
+  ]
+
+  push_actions = [
+    "ecr:CompleteLayerUpload",
+    "ecr:InitiateLayerUpload",
+    "ecr:PutImage",
+    "ecr:UploadLayerPart",
+  ]
+
+  # No role may remove what the pipeline wrote or loosen the repositories that hold
+  # it. Expiry belongs to the lifecycle policies alone.
+  denied_actions = [
+    "ecr:BatchDeleteImage",
+    "ecr:DeleteLifecyclePolicy",
+    "ecr:DeleteRepository",
+    "ecr:DeleteRepositoryPolicy",
+    "ecr:PutImageTagMutability",
+    "ecr:PutLifecyclePolicy",
+    "ecr:SetRepositoryPolicy",
+  ]
+
+  repository_names = merge(
+    { for key, repo in aws_ecr_repository.this : key => repo.name },
+    { for key, repo in aws_ecr_repository.cache : key => repo.name },
+  )
+
+  # Built from each repository's name rather than read back from the repository, so
+  # each role's policy is known at plan time and names exactly its repositories.
+  repository_arns = {
+    for key, name in local.repository_names : key => join(":", [
+      "arn", data.aws_partition.current.partition, "ecr", data.aws_region.current.region,
+      data.aws_caller_identity.current.account_id, "repository/${name}",
+    ])
+  }
+
+  arns = {
+    for area in local.areas : area => [
+      for key, arn in local.repository_arns : arn if local.repositories[key].area == area
+    ]
+  }
+
+  # A default-branch build pushes candidates and reads the release cache. A pull
+  # request reads the release cache and nothing else. The release job reads
+  # candidates and writes releases and caches.
+  writes = {
+    candidate    = local.arns.candidate
+    "cache-read" = []
+    release      = concat(local.arns.release, local.arns.cache)
+  }
+  reads = {
+    candidate    = local.arns.cache
+    "cache-read" = local.arns.cache
+    release      = local.arns.candidate
+  }
+}
+
+data "aws_partition" "current" {}
+
+data "aws_region" "current" {}
+
+data "aws_caller_identity" "current" {}
+
+data "context_label" "repository" {
+  for_each = local.repositories
+  values   = { name = each.value.image, attributes = "image-${each.value.area}" }
+}
+
+data "context_tags" "repository" {
+  for_each = local.repositories
+  values   = { name = each.value.image, attributes = "image-${each.value.area}" }
+}
+
+# trivy:ignore:AVD-AWS-0033 # AES-256 is sufficient for image bytes
+resource "aws_ecr_repository" "this" {
+  for_each = { for key, repo in local.repositories : key => repo if repo.area != "cache" }
+
+  name                 = data.context_label.repository[each.key].rendered
+  image_tag_mutability = "IMMUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  encryption_configuration {
+    encryption_type = "AES256"
+  }
+
+  tags = data.context_tags.repository[each.key].tags
+}
+
+# Each release moves the month's tag to its own cache, so these tags are mutable.
+# Only the release role writes this repository.
+# trivy:ignore:AVD-AWS-0031 # the month's cache tag must move, and only the release role can move it
+# trivy:ignore:AVD-AWS-0033 # AES-256 is sufficient for image bytes
+resource "aws_ecr_repository" "cache" {
+  for_each = { for key, repo in local.repositories : key => repo if repo.area == "cache" }
+
+  name                 = data.context_label.repository[each.key].rendered
+  image_tag_mutability = "MUTABLE"
+
+  image_scanning_configuration {
+    scan_on_push = true
+  }
+
+  encryption_configuration {
+    encryption_type = "AES256"
+  }
+
+  tags = data.context_tags.repository[each.key].tags
+}
+
+resource "aws_ecr_lifecycle_policy" "candidate" {
+  for_each = { for key, repo in local.repositories : key => repo if repo.area == "candidate" }
+
+  repository = aws_ecr_repository.this[each.key].name
+  policy = jsonencode({
+    rules = [{
+      rulePriority = 1
+      description  = "Expire candidate images and caches ${local.expire_after_days.candidate} days after push"
+      selection = {
+        tagStatus   = "any"
+        countType   = "sinceImagePushed"
+        countUnit   = "days"
+        countNumber = local.expire_after_days.candidate
+      }
+      action = { type = "expire" }
+    }]
+  })
+}
+
+resource "aws_ecr_lifecycle_policy" "cache" {
+  for_each = aws_ecr_repository.cache
+
+  repository = each.value.name
+  policy = jsonencode({
+    rules = [{
+      rulePriority = 1
+      description  = "Expire released caches ${local.expire_after_days.cache} days after push"
+      selection = {
+        tagStatus   = "any"
+        countType   = "sinceImagePushed"
+        countUnit   = "days"
+        countNumber = local.expire_after_days.cache
+      }
+      action = { type = "expire" }
+    }]
+  })
+}
+
+data "context_label" "role" {
+  for_each = local.subjects
+  values   = { name = "image", attributes = each.key }
+}
+
+data "context_tags" "role" {
+  for_each = local.subjects
+  values   = { name = "image", attributes = each.key }
+}
+
+data "aws_iam_policy_document" "trust" {
+  for_each = local.subjects
+
+  statement {
+    effect  = "Allow"
+    actions = ["sts:AssumeRoleWithWebIdentity"]
+
+    principals {
+      type        = "Federated"
+      identifiers = [var.github_oidc_provider_arn]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:aud"
+      values   = ["sts.amazonaws.com"]
+    }
+
+    condition {
+      test     = "StringEquals"
+      variable = "token.actions.githubusercontent.com:sub"
+      values   = [each.value]
+    }
+  }
+}
+
+resource "aws_iam_role" "this" {
+  for_each = local.subjects
+
+  name               = data.context_label.role[each.key].rendered
+  assume_role_policy = data.aws_iam_policy_document.trust[each.key].json
+  tags               = data.context_tags.role[each.key].tags
+}
+
+data "aws_iam_policy_document" "permissions" {
+  for_each = local.subjects
+
+  statement {
+    sid       = "EcrAuth"
+    effect    = "Allow"
+    actions   = ["ecr:GetAuthorizationToken"]
+    resources = ["*"]
+  }
+
+  dynamic "statement" {
+    for_each = length(local.writes[each.key]) > 0 ? [local.writes[each.key]] : []
+    content {
+      sid       = "Write"
+      effect    = "Allow"
+      actions   = concat(local.pull_actions, local.push_actions)
+      resources = statement.value
+    }
+  }
+
+  statement {
+    sid       = "Read"
+    effect    = "Allow"
+    actions   = local.pull_actions
+    resources = local.reads[each.key]
+  }
+
+  statement {
+    sid       = "NeverDeleteOrLoosen"
+    effect    = "Deny"
+    actions   = local.denied_actions
+    resources = values(local.repository_arns)
+  }
+}
+
+resource "aws_iam_role_policy" "this" {
+  for_each = local.subjects
+
+  name   = "${aws_iam_role.this[each.key].name}-ecr"
+  role   = aws_iam_role.this[each.key].id
+  policy = data.aws_iam_policy_document.permissions[each.key].json
+}

@@ -23,6 +23,7 @@ mechanisms live here, while account-specific delivery orchestration lives in `ck
 | [`context-schema`](modules/context-schema) | Outputs-only module emitting the org labeling schema (property order, slots, tag-case) that each root's `cloudposse/context` provider is configured from. |
 | [`deploy-roles`](modules/deploy-roles) | Spoke plan (RO) + apply (RW) IAM roles for the OIDC hub-spoke delivery model — standardized trust, caller-supplied permissions. |
 | [`ecr-image-publisher`](modules/ecr-image-publisher) | Protected-branch GitHub OIDC role for publishing reviewed images to ECR, with live permission checks. |
+| [`ecr-image-pipeline`](modules/ecr-image-pipeline) | Candidate, release and cache ECR repositories per image, with a default-branch build role, a pull-request cache-read role and a release-environment role, for the image pipeline. |
 | [`ecr-repo`](modules/ecr-repo) | Immutable ECR repository with candidate-age or release-count retention. |
 | [`log-group`](modules/log-group) | CloudWatch Logs log-group primitive — context-rendered name/tags, an optional AWS-mandated source prefix, and a caller-chosen retention. The logging sibling of `s3-bucket`. |
 | [`s3-bucket`](modules/s3-bucket) | Hardened, durable S3 bucket archetype for security/audit buckets, with a generic ARN-free `grants` seam for service-delivery policies. |
@@ -103,10 +104,9 @@ hook-expressible checks. Bump a tool version here and all consumers inherit it.
 
 ## Image delivery
 
-[`docs/image-delivery.md`](docs/image-delivery.md) describes the shared image lane. Pull requests
-build without AWS access, and the protected branch rebuilds the reviewed source before publishing.
-Consumers keep their application-specific build and runtime checks and pin the shared components at
-a released tag.
+[`docs/image-pipeline.md`](docs/image-pipeline.md) describes the image pipeline: pull requests build and test images and push nothing, and a push to the default branch builds, tests and releases them by digest in one run. The shared workflow is `image.yml`, and `modules/ecr-image-pipeline` provides the ECR side.
+
+The earlier lane, in which the protected branch rebuilds reviewed source ([`docs/image-delivery.md`](docs/image-delivery.md)), stays until no repository pins it.
 
 ### Local prerequisites
 

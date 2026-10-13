@@ -43,6 +43,19 @@ repos:
     hooks:
       - id: renovate-config-validator
 
+  - repo: https://github.com/shellcheck-py/shellcheck-py
+    rev: v0.11.0.1
+    hooks:
+      - id: shellcheck
+        files: ^image-pipeline/
+
+  # Only the image pipeline's workflow: the older workflows predate this hook.
+  - repo: https://github.com/rhysd/actionlint
+    rev: v1.7.12
+    hooks:
+      - id: actionlint
+        files: ^\.github/workflows/image\.yml$
+
   - repo: local
     hooks:
       - id: tofu-test
@@ -58,5 +71,13 @@ repos:
         entry: scripts/check-context-shared.sh
         language: script
         files: \.tf$
+        pass_filenames: false
+        require_serial: true
+
+      - id: image-pipeline-tests
+        name: image pipeline unit tests
+        entry: image-pipeline/tests/run.sh
+        language: script
+        files: ^(image-pipeline/|\.github/workflows/image\.yml$)
         pass_filenames: false
         require_serial: true
