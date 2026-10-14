@@ -95,7 +95,7 @@ jobs:
           tofu_wrapper: false
 
       - name: Install tflint
-        uses: terraform-linters/setup-tflint@1cf010d3c7aef302051ccdb68c14c5dc2efa34ef # v6.3.1
+        uses: terraform-linters/setup-tflint@6ffdbaa3be476b3431f7275c26966ef32ff60337 # v6.3.2
 
       - name: Install trivy
         uses: aquasecurity/setup-trivy@81e514348e19b6112ce2a7e3ecbafe19c1e1f567 # v0.3.1
@@ -118,7 +118,7 @@ jobs:
           sudo install gitleaks /usr/local/bin/gitleaks
 
       - name: Run the quality bar
-        uses: j178/prek-action@4e14d07f9231acabce116ccfca13b13dd9755ece # v3.0.0
+        uses: j178/prek-action@1382ad72dea72f9d53832f2bcb65b3e87a947204 # v3.0.1
         env:
           # tflint --init fetches plugin metadata from the GitHub API; anonymous is 60/hr shared
           # across the runner's IP. Ambient run token, not a secret a caller has to supply.
