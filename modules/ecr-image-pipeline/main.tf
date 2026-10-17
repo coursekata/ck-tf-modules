@@ -8,11 +8,11 @@ locals {
   }
 
   # A candidate lives until its run's release, which a re-run can repeat for up to
-  # 30 days. A released cache is imported only in its own epoch month, and one the
-  # month's tag has moved off waits out the same expiry, since ECR counts from the
-  # push. Released images never expire, since a deployment may still name their
-  # digest.
-  expire_after_days = { candidate = 30, cache = 62 }
+  # 30 days. A cache a later release replaced keeps no tag and expires 7 days after
+  # its push, not its replacement. Builds import the tagged cache, which never
+  # expires, and released images never expire, since a deployment may still name
+  # their digest.
+  expire_after_days = { candidate = 30, cache = 7 }
 
   subjects = {
     candidate    = "repo:${var.github_repository}:ref:refs/heads/${var.default_branch}"
@@ -116,9 +116,9 @@ resource "aws_ecr_repository" "this" {
   tags = data.context_tags.repository[each.key].tags
 }
 
-# Each release moves the month's tag to its own cache, so these tags are mutable.
+# Each release moves the cache tag to its own cache, so these tags are mutable.
 # Only the release role writes this repository.
-# trivy:ignore:AVD-AWS-0031 # the month's cache tag must move, and only the release role can move it
+# trivy:ignore:AVD-AWS-0031 # the cache tag must move, and only the release role can move it
 # trivy:ignore:AVD-AWS-0033 # AES-256 is sufficient for image bytes
 resource "aws_ecr_repository" "cache" {
   for_each = { for key, repo in local.repositories : key => repo if repo.area == "cache" }
@@ -163,9 +163,9 @@ resource "aws_ecr_lifecycle_policy" "cache" {
   policy = jsonencode({
     rules = [{
       rulePriority = 1
-      description  = "Expire released caches ${local.expire_after_days.cache} days after push"
+      description  = "Expire untagged caches ${local.expire_after_days.cache} days after push"
       selection = {
-        tagStatus   = "any"
+        tagStatus   = "untagged"
         countType   = "sinceImagePushed"
         countUnit   = "days"
         countNumber = local.expire_after_days.cache

@@ -2,11 +2,11 @@
 
 The ECR side of the image pipeline for one GitHub repository: a candidate, a release and a cache repository for each image it builds, and three roles.
 
-- The **candidate role** trusts only a push to the repository's default branch. It pushes candidate images and caches and reads the release cache.
+- The **candidate role** trusts only default-branch jobs: a push, or a run by hand. It pushes candidate images and caches and reads the release cache.
 - The **cache-read role** trusts the repository's `pull_request` jobs. It reads the release cache and nothing else.
 - The **release role** trusts only jobs in the repository's `release` environment. It reads candidates and writes the release and cache repositories.
 
-Candidate and release tags are immutable. The cache repository's tags are mutable, because each release moves the month's tag to its own cache, and only the release role writes it. Candidates expire 30 days after push and released caches after 62, tagged or not; released images never expire. No role can delete an image, change a lifecycle policy or loosen a repository, by an explicit deny.
+Candidate and release tags are immutable. The cache repository's tags are mutable, because each release moves the cache tag to its own cache, and only the release role writes it. Candidates expire 30 days after push, tagged or not. A cache that a later release replaced keeps no tag and expires 7 days after its push; the tagged cache never expires, and neither do released images. No role can delete an image, change a lifecycle policy or loosen a repository, by an explicit deny.
 
 The `release` environment must exist, with a deployment branch policy naming only the default branch, before the release role is trusted: GitHub creates a missing environment, with no rules, for any workflow that names it. The account's GitHub OIDC provider stays with the consuming account's identity root.
 

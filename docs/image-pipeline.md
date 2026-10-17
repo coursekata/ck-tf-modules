@@ -12,19 +12,25 @@ Every released digest is exactly the bytes that one default-branch run built and
 
 1. The bake targets are resolved once, with nothing from the job's environment, and the build runs from that definition. Each image target must build the stage its test replaces, and its test must build a stage of its own for the same platforms.
 2. One bake call builds every image and every test target. Nothing is pushed and no cache is exported, and each test stage re-runs rather than matching a cache.
-3. The build imports the image's release cache for the current month, by digest. On ECR that takes the cache-read role. A fork's pull request gets no OIDC token and builds without the cache.
+3. The build imports the image's release cache, by digest. On ECR that takes the cache-read role. A fork's pull request gets no OIDC token and builds without the cache.
 4. Each image's own `HEALTHCHECK` runs (see Health run), on the image loaded into Docker from this build for the runner's platform.
 
 The required check is the build job, `image / build`.
 
 ## On a push to the default branch
 
-1. The images are built from the same resolved definition, importing the month's release cache, and each is pushed by digest to its candidate repository with its cache beside it, tagged `cache-<run id>-<run attempt>`. Both digests come from the build's own metadata, so no tag is read back.
+1. The images are built from the same resolved definition, importing the release cache, and each is pushed by digest to its candidate repository with its cache beside it, tagged `cache-<run id>-<run attempt>`. Both digests come from the build's own metadata, so no tag is read back.
 2. Each image's tests run on its digest: the stage the test target builds on is replaced by `docker-image://<candidate>@<digest>`, with no cache imported or exported and `no-cache` set. A test whose stages never build on that image fails, since its tests would have run on something else.
 3. Each image's own `HEALTHCHECK` runs on the tested candidate, pulled by digest for the runner's platform. A failure fails the build job, so nothing is released.
-4. The release job, in the `release` environment, copies each tested image by digest to its release repository as `sha-<commit>` and `run-<run id>`, and its cache to the cache repository's tag for the month, then reads every tag back. It outputs the released digests.
+4. The release job, in the `release` environment, copies each tested image by digest to its release repository as `sha-<commit>` and `run-<run id>`, and its cache to the cache repository's `current` tag, then reads every tag back. It outputs the released digests.
 
-A release repository that already holds `sha-<commit>` keeps it. Re-running failed jobs finishes whatever an earlier attempt left. A full re-run that rebuilt the image leaves the first release, and the month's cache, where they are.
+A release repository that already holds `sha-<commit>` keeps it. Re-running failed jobs finishes whatever an earlier attempt left. A full re-run of a push that rebuilt the image leaves the first release and the cache where they are.
+
+## On a run by hand
+
+A build that imports the cache reuses each step whose instruction and earlier steps are unchanged, whatever that step would install today. Running the caller's workflow by hand on the default branch builds its head commit without the cache, tests and health-checks each image as a push does, and moves the `current` tag to the run's cache. A commit with no release yet is released. A commit already released keeps that release: `sha-<commit>` never moves, the run adds no `run-<run id>` tag, and the job outputs the existing digest while its summary notes the rebuilt one. The next push imports the new cache, so the image it releases carries the rebuilt layers. The caller's `on:` must list `workflow_dispatch`.
+
+Run it when a cached layer is suspect, or when an image installs packages it does not pin and needs newer ones now. A change to the base image already rebuilds every step. A push that was already building when the run released carries the earlier layers and puts them back in the cache, so run it again once that push has released.
 
 ## Health run
 
@@ -93,6 +99,7 @@ on:
   pull_request:
   push:
     branches: [main]
+  workflow_dispatch:
 
 permissions:
   contents: read
@@ -154,7 +161,9 @@ The value reaches every build of the repository, pull requests included, and eve
 | The release fails partway | Re-run failed jobs: the release copies the same run's digests, and tags already written stand |
 | A released run is re-run in full | The first release stands, and the job summary notes the rebuilt digest |
 | A merge whose message carries `[skip ci]` | No run starts; that commit gets no release, and the next merge releases its changes |
-| No cache for the month yet | The build starts cold |
+| An image with no release cache yet | The build starts cold |
+| A run by hand on another branch | The build job fails before building |
+| A replaced cache expires while a build that pinned it runs | The build fails; a re-run imports the current cache |
 | An image does not become healthy, or its process exits | As a failed test: the pull request's check fails, or nothing is released |
 | An image declares no `HEALTHCHECK`, or does not ship the runner's platform | A warning; the job goes on |
 | A fork's pull request builds an image that reads the build secret | The build gets the secret empty and fails where it uses it |
@@ -164,7 +173,8 @@ The value reaches every build of the repository, pull requests included, and eve
 - The release is a second build. The pull request tested a build of its merge commit; the default-branch run builds the merged commit again and tests that. Pinned inputs, such as base images by digest and lockfiles, give both builds the same software. Unpinned ones can differ, and the default-branch tests are what stand behind the released bytes.
 - Nothing is signed. A released digest maps to its commit through `sha-<commit>` and to its run through `run-<run id>`.
 - On ECR, only review keeps the caller's pin on a release tag of this repository.
-- Third-party code that runs inside a default-branch build shapes that image and, through the cache, that month's later builds.
+- Third-party code that runs inside a default-branch build shapes that image. The cache carries it into later builds until its step or an earlier one changes, or a run by hand rebuilds it.
+- Anyone who can run the workflow by hand can rebuild the default branch without the cache and replace the cache, with no merge. It builds only reviewed code, but anything that code does not pin resolves again.
 - The health run covers the runner's platform only, with no network and no other services.
 - The build secret reaches third-party code inside every build that reads it.
 

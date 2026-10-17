@@ -2,9 +2,11 @@ name: image
 
 # Builds and tests a repository's images on its pull requests, pushing nothing. On a
 # push to its default branch it builds them again, pushes each by digest, tests that
-# digest, and releases exactly the tested digests. A repository calls this from a
-# workflow with one job, pinned by a release tag of this repository; the image
-# pipeline docs here describe the contract.
+# digest, and releases exactly the tested digests. Run by hand on the default branch,
+# it builds without the release cache, tests as a push does, and makes its cache the
+# release cache; it releases only a commit with no release yet. A repository calls
+# this from a workflow with one job, pinned by a release tag of this repository; the
+# image pipeline docs here describe the contract.
 #
 # Each job runs on a fresh GitHub-hosted runner. The build job starts its own
 # BuildKit builder, so no build state outlives it; the release job only copies, with
@@ -79,27 +81,29 @@ jobs:
           echo "WORK=$RUNNER_TEMP/image-pipeline" >> "$GITHUB_ENV"
           mkdir -p "$RUNNER_TEMP/image-pipeline"
 
-      - name: Require a pull request, or a push to the default branch
+      - name: Require a pull request, or a push or a run by hand on the default branch
         id: mode
         env:
           EVENT: ${{ github.event_name }}
           DEFAULT_BRANCH: ${{ github.event.repository.default_branch }}
         run: |
           case "$EVENT" in
-            pull_request) mode="pr" ;;
-            push)
+            pull_request) mode=pr fresh=false ;;
+            push | workflow_dispatch)
               if [ "$GITHUB_REF" != "refs/heads/$DEFAULT_BRANCH" ]; then
-                echo "::error::This push is to $GITHUB_REF. Images are released only from the default branch, $DEFAULT_BRANCH."
+                echo "::error::This run is on $GITHUB_REF. Images are released only from the default branch, $DEFAULT_BRANCH."
                 exit 1
               fi
-              mode="push"
+              mode=push fresh=false
+              if [ "$EVENT" = workflow_dispatch ]; then fresh=true; fi
               ;;
             *)
-              echo "::error::The image pipeline runs on pull_request and on push to the default branch, not on $EVENT."
+              echo "::error::The image pipeline runs on pull_request, and on push or workflow_dispatch on the default branch, not on $EVENT."
               exit 1
               ;;
           esac
           echo "mode=$mode" >> "$GITHUB_OUTPUT"
+          echo "fresh=$fresh" >> "$GITHUB_OUTPUT"
 
       - name: Check out the commit under build
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
@@ -175,11 +179,11 @@ jobs:
         working-directory: src
         env:
           MODE: ${{ steps.mode.outputs.mode }}
-          IMPORT: ${{ steps.role.outputs.arn != '' }}
+          IMPORT: ${{ steps.role.outputs.arn != '' && steps.mode.outputs.fresh != 'true' }}
           BUILD_SECRET: ${{ secrets.build-secret }}
           BUILD_SECRET_ENV: ${{ inputs.build-secret-env }}
         run: |
-          "$PIPELINE/build.sh" "$WORK/targets.json" "$WORK/resolved.json" "$MODE" "$(date -u +%Y-%m)" "$IMPORT" \
+          "$PIPELINE/build.sh" "$WORK/targets.json" "$WORK/resolved.json" "$MODE" "$IMPORT" \
             "$GITHUB_RUN_ID" "$GITHUB_RUN_ATTEMPT" "$WORK" > "$WORK/build.json"
 
       - name: Test each image on its pushed digest
@@ -215,7 +219,7 @@ jobs:
 
   release:
     needs: build
-    if: github.event_name == 'push'
+    if: github.event_name == 'push' || github.event_name == 'workflow_dispatch'
     runs-on: ${{ inputs.runner }}
     cache-mode: none
     environment: release

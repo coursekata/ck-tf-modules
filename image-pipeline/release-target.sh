@@ -1,13 +1,14 @@
 #!/usr/bin/env bash
 # Releases one target this run built and tested. The image is copied by digest to the
 # release repository as sha-<commit> and run-<run id>, then its cache by digest to the
-# cache repository's tag for the build's month. It never builds, and both candidate
-# digests are checked before anything is written.
+# cache repository's cache tag. It never builds, and both candidate digests are
+# checked before anything is written.
 #
-# sha-<commit> already present means an earlier attempt of a run for this commit
-# released it. If it names this run's digest, this finishes whatever that attempt
-# left. If it names another, a full re-run rebuilt an image that was already
-# released: the first release stands, and the month's cache stays where it is.
+# sha-<commit> already present means an earlier run or attempt released this commit.
+# If it names this run's digest, this finishes whatever that attempt left. If it
+# names another, the first release stands. A build that imported the cache leaves the
+# cache where it is; one built without it still replaces the cache, so the next build
+# reuses its layers.
 # usage: release-target.sh <targets.json> <build.json> <target> <commit sha> <run id>
 #   prints {"target", "digest" (the commit's release), "copied": [...], "note"}
 set -euo pipefail
@@ -25,12 +26,12 @@ jq -e --slurpfile c "$targets" '(.targets | keys) == ([$c[0][].target] | sort)' 
 IFS=$'\t' read -r candidate release cache < <(jq -r --arg t "$t" \
   '.[] | select(.target == $t) | [.candidate, .release, .cache] | @tsv' "$targets") ||
   die "$t is not a configured target"
-IFS=$'\t' read -r digest cache_digest epoch < <(jq -r --arg t "$t" \
-  '[.targets[$t].digest, .targets[$t].cache_digest, .epoch] | @tsv' "$build")
+IFS=$'\t' read -r digest cache_digest fresh < <(jq -r --arg t "$t" \
+  '[.targets[$t].digest, .targets[$t].cache_digest, (.fresh | tostring)] | @tsv' "$build")
 
 [[ $digest =~ ^sha256:[0-9a-f]{64}$ ]] || die "$t: the build's image digest '$digest' is not a digest"
 [[ $cache_digest =~ ^sha256:[0-9a-f]{64}$ ]] || die "$t: the build's cache digest '$cache_digest' is not a digest"
-[[ $epoch =~ ^[0-9]{4}-(0[1-9]|1[0-2])$ ]] || die "the build's epoch '$epoch' is not a month, YYYY-MM"
+case "$fresh" in true | false) ;; *) die "the build's fresh '$fresh' is not true or false" ;; esac
 
 emit() {
   jq -cn --arg t "$t" --arg d "$1" --argjson copied "$2" --arg note "${3:-}" \
@@ -55,29 +56,39 @@ copy() { docker buildx imagetools create --prefer-index=false --tag "$2" "$1" >&
 
 sha_ref="$release:sha-$sha"
 run_ref="$release:run-$run"
-cache_ref="$cache:$epoch"
+cache_ref="$cache:$RELEASE_CACHE_TAG"
 
+# stands: the commit's release, when an earlier run released another image for it.
+stands=
 released=$(state "$sha_ref")
 case "$released" in
   present:*)
     if [ "${released#present:}" != "$digest" ]; then
-      emit "${released#present:}" '[]' "$sha_ref was released as ${released#present:} by an earlier attempt, and that release stands. This attempt rebuilt the image as $digest; the month's cache stays where it is."
-      exit 0
+      stands=${released#present:}
+      if ! $fresh; then
+        emit "$stands" '[]' "$sha_ref was released as $stands by an earlier run, and that release stands. This attempt rebuilt the image as $digest; the cache stays where it is."
+        exit 0
+      fi
     fi
     copy_image=false
     ;;
   absent) copy_image=true ;;
 esac
 
-tagged=$(state "$run_ref")
-case "$tagged" in
-  present:*)
-    [ "${tagged#present:}" = "$digest" ] ||
-      die "$run_ref already names ${tagged#present:}, not this run's image $digest"
-    copy_run=false
-    ;;
-  absent) copy_run=true ;;
-esac
+if [ -n "$stands" ]; then
+  # run-<run id> names what a run released, and this one releases no image.
+  copy_run=false
+else
+  tagged=$(state "$run_ref")
+  case "$tagged" in
+    present:*)
+      [ "${tagged#present:}" = "$digest" ] ||
+        die "$run_ref already names ${tagged#present:}, not this run's image $digest"
+      copy_run=false
+      ;;
+    absent) copy_run=true ;;
+  esac
+fi
 
 cached=$(state "$cache_ref")
 if [ "$cached" = "present:$cache_digest" ]; then copy_cache=false; else copy_cache=true; fi
@@ -106,10 +117,16 @@ if $copy_cache; then
   copied=$(jq -c '. + ["cache"]' <<<"$copied")
 fi
 
-for pair in "$sha_ref $digest" "$run_ref $digest" "$cache_ref $cache_digest"; do
+checks=("$cache_ref $cache_digest")
+[ -n "$stands" ] || checks=("$sha_ref $digest" "$run_ref $digest" "${checks[@]}")
+for pair in "${checks[@]}"; do
   read -r ref want <<<"$pair"
   landed=$(state "$ref")
   [ "$landed" = "present:$want" ] || die "$ref reads back as ${landed#present:}, but this run's is $want"
 done
 
-emit "$digest" "$copied"
+if [ -n "$stands" ]; then
+  emit "$stands" "$copied" "$sha_ref was released as $stands, and that release stands. This run rebuilt the image without the cache as $digest. Its cache is now the release cache, so the next build reuses those layers."
+else
+  emit "$digest" "$copied"
+fi

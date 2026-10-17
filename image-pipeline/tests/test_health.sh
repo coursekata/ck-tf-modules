@@ -14,7 +14,7 @@ setup() {
     candidate: $c, release: "r.example/r", cache: "r.example/k"}]' >"$W/targets.json"
   jq -n '{target: {app: {target: "runtime", platforms: ["linux/arm64"]},
     "app-test": {target: "test", platforms: ["linux/arm64"]}}}' >"$W/resolved.json"
-  jq -n --arg d "$D1" '{epoch: "2026-10", targets: {app: {digest: $d, cache_digest: $d}}}' >"$W/build.json"
+  jq -n --arg d "$D1" '{fresh: false, targets: {app: {digest: $d, cache_digest: $d}}}' >"$W/build.json"
   echo linux/arm64 >"$FAKE_STATE/platform"
   echo '["CMD-SHELL","wget -q -O /dev/null http://127.0.0.1:8080/"]' >"$FAKE_STATE/healthcheck"
 }

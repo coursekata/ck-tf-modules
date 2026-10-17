@@ -11,19 +11,20 @@
 # digests come from bake's metadata, so no tag is read back. Prints them, for the
 # test step and the release job.
 #
-# Either mode imports the image's release cache for the epoch month, by the digest
-# its tag names, when the run can read it. A month with no cache yet starts cold.
-# usage: build.sh <targets.json> <resolved.json> <pr|push> <epoch YYYY-MM> <import cache: true|false> <run id> <run attempt> <work dir>
-#   push prints {"epoch", "targets": {<target>: {"digest", "cache_digest"}}}
+# Either mode imports the image's release cache, by the digest its tag names, when
+# the run is told to import it. An image with no release cache yet starts cold. A
+# push told not to import reports fresh: true, so its release replaces the cache even
+# for a commit already released.
+# usage: build.sh <targets.json> <resolved.json> <pr|push> <import cache: true|false> <run id> <run attempt> <work dir>
+#   push prints {"fresh", "targets": {<target>: {"digest", "cache_digest"}}}
 # Run from the repository root.
 set -euo pipefail
 here=$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)
 # shellcheck source=lib.sh
 . "$here/lib.sh"
 
-targets=$1 resolved=$2 mode=$3 epoch=$4 import=$5 run=$6 attempt=$7 work=$8
+targets=$1 resolved=$2 mode=$3 import=$4 run=$5 attempt=$6 work=$7
 case "$mode" in pr | push) ;; *) die "mode must be pr or push, got $mode" ;; esac
-[[ $epoch =~ ^[0-9]{4}-(0[1-9]|1[0-2])$ ]] || die "the epoch must be a month, YYYY-MM, got $epoch"
 case "$import" in true | false) ;; *) die "import must be true or false, got $import" ;; esac
 [[ $run =~ ^[0-9]+$ ]] || die "the run id must be a number, got $run"
 [[ $attempt =~ ^[0-9]+$ ]] || die "the run attempt must be a number, got $attempt"
@@ -50,22 +51,22 @@ check_kind() {
   fi
 }
 
-# cache_from <cache repository>: the bake cache-from list for the month's release
-# cache, pinned to the digest its tag names now.
+# cache_from <cache repository>: the bake cache-from list for the release cache,
+# pinned to the digest its tag names now.
 cache_from() {
   local d rc=0
   if [ "$import" = false ]; then
     echo '[]'
     return
   fi
-  d=$(digest_of "$1:$epoch") || rc=$?
+  d=$(digest_of "$1:$RELEASE_CACHE_TAG") || rc=$?
   case $rc in
     0) jq -nc --arg r "$1@$d" '["type=registry,ref=\($r)"]' ;;
     3)
-      echo "no release cache at $1:$epoch yet; this build starts cold" >&2
+      echo "no release cache at $1:$RELEASE_CACHE_TAG yet; this build starts cold" >&2
       echo '[]'
       ;;
-    *) die "could not read the release cache $1:$epoch" ;;
+    *) die "could not read the release cache $1:$RELEASE_CACHE_TAG" ;;
   esac
 }
 
@@ -110,4 +111,5 @@ while IFS=$'\t' read -r t candidate; do
   out=$(jq -c --arg t "$t" --arg d "$digest" --arg cd "$cache_digest" '.[$t] = {digest: $d, cache_digest: $cd}' <<<"$out")
 done < <(jq -r '.[] | [.target, .candidate] | @tsv' "$targets")
 
-jq -n --arg e "$epoch" --argjson t "$out" '{epoch: $e, targets: $t}'
+if [ "$import" = true ]; then fresh=false; else fresh=true; fi
+jq -n --argjson f "$fresh" --argjson t "$out" '{fresh: $f, targets: $t}'

@@ -52,7 +52,7 @@ run "repositories_take_the_confirmed_names" {
 
   assert {
     condition     = alltrue([for r in aws_ecr_repository.cache : r.image_tag_mutability == "MUTABLE"])
-    error_message = "the cache repository's tags are mutable, since each release moves the month's tag"
+    error_message = "the cache repository's tags are mutable, since each release moves the cache tag"
   }
 
   assert {
@@ -61,7 +61,7 @@ run "repositories_take_the_confirmed_names" {
   }
 }
 
-run "candidates_and_caches_expire_and_releases_do_not" {
+run "candidates_and_replaced_caches_expire_and_releases_do_not" {
   command = apply
 
   assert {
@@ -75,14 +75,16 @@ run "candidates_and_caches_expire_and_releases_do_not" {
 
   assert {
     condition = (
-      jsondecode(aws_ecr_lifecycle_policy.cache["dbt-runner/cache"].policy).rules[0].selection.countNumber == 62 &&
-      jsondecode(aws_ecr_lifecycle_policy.cache["dbt-runner/cache"].policy).rules[0].selection.tagStatus == "any"
+      length(jsondecode(aws_ecr_lifecycle_policy.cache["dbt-runner/cache"].policy).rules) == 1 &&
+      jsondecode(aws_ecr_lifecycle_policy.cache["dbt-runner/cache"].policy).rules[0].selection.countNumber == 7 &&
+      jsondecode(aws_ecr_lifecycle_policy.cache["dbt-runner/cache"].policy).rules[0].selection.countType == "sinceImagePushed" &&
+      jsondecode(aws_ecr_lifecycle_policy.cache["dbt-runner/cache"].policy).rules[0].selection.tagStatus == "untagged"
     )
-    error_message = "released caches, tagged or not, expire 62 days after push"
+    error_message = "untagged caches expire 7 days after push, and the tagged cache never expires"
   }
 
   assert {
-    condition     = strcontains(aws_ecr_lifecycle_policy.cache["dbt-runner/cache"].policy, "\"countNumber\":62")
+    condition     = strcontains(aws_ecr_lifecycle_policy.cache["dbt-runner/cache"].policy, "\"countNumber\":7")
     error_message = "countNumber must render as a JSON number"
   }
 
