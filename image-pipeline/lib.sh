@@ -6,6 +6,11 @@ if [ "${BASH_VERSINFO[0]}" -lt 4 ]; then
   exit 1
 fi
 
+# The tag in an image's cache repository that names the cache its builds import.
+# Each release moves it to that release's cache.
+# shellcheck disable=SC2034 # read by the scripts that source this one
+RELEASE_CACHE_TAG=current
+
 die() {
   echo "::error::$*" >&2
   exit 1

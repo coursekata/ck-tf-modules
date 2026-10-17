@@ -116,9 +116,9 @@ test_only_the_release_job_declares_an_environment() {
   assert_eq release "$(yq -r '.jobs.release.environment' "$WF")"
 }
 
-test_the_release_runs_only_on_a_push_and_only_after_the_build() {
+test_the_release_runs_only_on_a_push_or_a_run_by_hand_and_only_after_the_build() {
   need
-  assert_eq "github.event_name == 'push'" "$(yq -r '.jobs.release.if' "$WF")"
+  assert_eq "github.event_name == 'push' || github.event_name == 'workflow_dispatch'" "$(yq -r '.jobs.release.if' "$WF")"
   assert_eq build "$(yq -r '.jobs.release.needs' "$WF")"
 }
 
@@ -141,15 +141,21 @@ test_each_job_assumes_its_own_role() {
   assert_eq '${{ inputs.release-role-arn }}' "$(yq -r '.jobs.release.steps[] | select(.uses == "aws-actions/configure-aws-credentials@*") | .with."role-to-assume"' "$WF")"
 }
 
-test_the_mode_gate_admits_only_a_pull_request_and_a_push_to_the_default_branch() {
+test_a_run_by_hand_builds_without_the_cache() {
+  need
+  assert_eq "\${{ steps.role.outputs.arn != '' && steps.mode.outputs.fresh != 'true' }}" "$(step build build env.IMPORT)"
+}
+
+test_the_mode_gate_admits_a_pull_request_and_a_push_or_a_run_by_hand_on_the_default_branch() {
   local e
   need
   assert_eq '${{ github.event_name }}' "$(step build mode env.EVENT)"
   assert_eq '${{ github.event.repository.default_branch }}' "$(step build mode env.DEFAULT_BRANCH)"
-  assert_eq mode=pr "$(gate mode EVENT=pull_request GITHUB_REF=refs/pull/7/merge DEFAULT_BRANCH=main)"
-  assert_eq mode=push "$(gate mode EVENT=push GITHUB_REF=refs/heads/main DEFAULT_BRANCH=main)"
+  assert_eq $'mode=pr\nfresh=false' "$(gate mode EVENT=pull_request GITHUB_REF=refs/pull/7/merge DEFAULT_BRANCH=main)"
+  assert_eq $'mode=push\nfresh=false' "$(gate mode EVENT=push GITHUB_REF=refs/heads/main DEFAULT_BRANCH=main)"
+  assert_eq $'mode=push\nfresh=true' "$(gate mode EVENT=workflow_dispatch GITHUB_REF=refs/heads/main DEFAULT_BRANCH=main)"
   for e in "EVENT=push GITHUB_REF=refs/heads/feature" "EVENT=push GITHUB_REF=refs/tags/v1" \
-    "EVENT=workflow_dispatch GITHUB_REF=refs/heads/main" "EVENT=schedule GITHUB_REF=refs/heads/main" \
+    "EVENT=workflow_dispatch GITHUB_REF=refs/heads/feature" "EVENT=schedule GITHUB_REF=refs/heads/main" \
     "EVENT=pull_request_target GITHUB_REF=refs/heads/main"; do
     # shellcheck disable=SC2086 # each case is two assignments
     if gate mode $e DEFAULT_BRANCH=main >/dev/null; then fail "the gate admits $e"; fi
