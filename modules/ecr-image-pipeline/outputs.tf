@@ -10,7 +10,7 @@ output "repositories" {
 }
 
 output "candidate_role_arn" {
-  description = "Role the image workflow assumes on a push to the default branch, to push candidates and read the release cache."
+  description = "Role the image workflow's default-branch build assumes, on a push or a run by hand, to push candidates and read the release cache."
   value       = aws_iam_role.this["candidate"].arn
 }
 

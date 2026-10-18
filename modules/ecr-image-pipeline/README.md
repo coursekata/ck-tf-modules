@@ -2,7 +2,7 @@
 
 The ECR side of the image pipeline for one GitHub repository: a candidate, a release and a cache repository for each image it builds, and three roles.
 
-- The **candidate role** trusts only default-branch jobs: a push, or a run by hand. It pushes candidate images and caches and reads the release cache.
+- The **candidate role** trusts any job on the default branch outside an environment, which is how a push and a run by hand both reach it. It pushes candidate images and caches and reads the release cache.
 - The **cache-read role** trusts the repository's `pull_request` jobs. It reads the release cache and nothing else.
 - The **release role** trusts only jobs in the repository's `release` environment. It reads candidates and writes the release and cache repositories.
 
