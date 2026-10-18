@@ -45,7 +45,10 @@ An image that declares no `HEALTHCHECK`, or `HEALTHCHECK NONE`, gets a warning a
 - Changes land only through pull requests, with no bypass: rulesets list no bypass actors, and classic branch protection includes administrators.
 - The required check is `image / build`, pinned to the GitHub Actions app.
 - With a second maintainer, one approval and "Require approval of the most recent reviewable push" are required, and CODEOWNERS covers `.github/**`, `**/Dockerfile*` and `**/docker-bake.hcl`.
-- The default `GITHUB_TOKEN` is read-only, and GitHub Actions may not create or approve pull requests.
+- The default `GITHUB_TOKEN` is read-only.
+- Where the ruleset requires an approving review, GitHub Actions may not create or approve pull requests, since a workflow's approval would stand in for a person's. A repository that requires none may leave it on, so a workflow-run Renovate can open pull requests.
+- Dependency bots run with automerge off. Which bots a repository runs is its own choice: a bot's pull-request run, like any other, pushes nothing and can only read the release cache.
+- Every job that logs in to a cloud calls only an org reusable workflow, never a third-party action directly, so a dependency bot's unreviewed update to that action cannot reach the credentials.
 - An environment named `release` exists before any role or secret trusts it, with a "Selected branches" deployment policy naming only the default branch. A workflow that names a missing environment creates it with no rules. Only the shared workflow's release job declares it.
 - GitHub-hosted runners only. No workflow in the repository runs on `pull_request_target`.
 
@@ -77,6 +80,8 @@ target "app-test" {
 
 An image whose stage is not the one its test replaces is refused before anything builds, and a test whose stages never build on the replaced stage fails.
 
+Set each stage's `WORKDIR` once. Two steps that produce the same layer, such as a second `WORKDIR` that changes nothing, share one creation time in the registry cache, so a cached rebuild rewrites the image's history and gets a new digest. Every merge then releases a new digest from unchanged code, and a deployment that follows it redeploys an identical image.
+
 A served image declares a `HEALTHCHECK` that probes it over loopback, since the health run gives it no network:
 
 ```dockerfile
@@ -90,7 +95,7 @@ HEALTHCHECK --interval=10s --timeout=3s --start-period=30s --retries=3 \
 
 ### The caller
 
-Each repository has one caller workflow with one job. It pins the shared workflow by a release tag of this repository, never a commit SHA. GitHub resolves a SHA from any fork of a public repository, so a reviewer cannot tell a fork's commit from a real one, while a tag resolves only here, where tags cannot be moved or deleted. Renovate should keep the tag form.
+Each repository has one caller workflow with one job. It pins the shared workflow by a release tag of this repository, never a commit SHA. GitHub resolves a SHA from any fork of a public repository, so a reviewer cannot tell a fork's commit from a real one, while a tag resolves only here, where tags cannot be moved or deleted. The repository's dependency bot should keep the tag form.
 
 ```yaml
 name: image
