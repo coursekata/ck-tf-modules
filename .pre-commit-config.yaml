@@ -1,3 +1,8 @@
+# This repository's own hooks, then a copy of ck-ci's OpenTofu bar. CI runs the bar itself from
+# tf-quality.yml at the release ci.yml calls, whatever this file says, and runs the hooks above the
+# copy in a job of its own; the copy is here so the same checks run before a push. Renovate moves
+# every rev, the bar's two ck-ci entries with the workflow's tag.
+default_install_hook_types: [pre-commit, pre-push]
 repos:
   - repo: https://github.com/pre-commit/pre-commit-hooks
     rev: v6.0.0
@@ -8,64 +13,13 @@ repos:
       - id: check-yaml
       - id: check-added-large-files
 
-  # Stops a secret from ever entering the history; CI re-checks the full commit graph, because
-  # this hook only sees the staged diff and yields to --no-verify.
-  - repo: https://github.com/gitleaks/gitleaks
-    rev: v8.30.1
-    hooks:
-      # -system resolves gitleaks from PATH like the terraform hooks below resolve their tools;
-      # upstream omits pass_filenames on this variant only, so the staged paths would otherwise
-      # be appended and the first one read as gitleaks' target directory.
-      - id: gitleaks-system
-        pass_filenames: false
-
-  - repo: https://github.com/antonbabenko/pre-commit-terraform
-    rev: v1.109.1
-    hooks:
-      - id: terraform_fmt
-        args:
-          - --hook-config=--tf-path=tofu
-      # Modules ARE the content here (no root callers), so validate runs on them directly.
-      - id: terraform_validate
-        args:
-          - --hook-config=--tf-path=tofu
-          - --tf-init-args=-backend=false
-      - id: terraform_tflint
-        args:
-          - --hook-config=--tf-path=tofu
-          - --args=--config=__GIT_WORKING_DIR__/.tflint.hcl
-      - id: terraform_trivy
-        args:
-          - --hook-config=--tf-path=tofu
-
   - repo: https://github.com/renovatebot/pre-commit-hooks
     rev: 44.57.2
     hooks:
       - id: renovate-config-validator
 
-  - repo: https://github.com/shellcheck-py/shellcheck-py
-    rev: v0.11.0.1
-    hooks:
-      - id: shellcheck
-        files: ^image-pipeline/
-
-  # Only the image pipeline's workflow: the older workflows predate this hook.
-  - repo: https://github.com/rhysd/actionlint
-    rev: v1.7.12
-    hooks:
-      - id: actionlint
-        files: ^\.github/workflows/image\.yml$
-
   - repo: local
     hooks:
-      - id: tofu-test
-        name: tofu test (changed modules)
-        entry: scripts/tofu-test-changed.sh
-        language: script
-        files: \.(tf|tftest\.hcl)$
-        exclude: (^|/)\.terraform/
-        require_serial: true
-
       - id: context-shared
         name: context.tf is byte-identical across modules
         entry: scripts/check-context-shared.sh
@@ -74,10 +28,54 @@ repos:
         pass_filenames: false
         require_serial: true
 
-      - id: image-pipeline-tests
-        name: image pipeline unit tests
-        entry: image-pipeline/tests/run.sh
-        language: script
-        files: ^(image-pipeline/|\.github/workflows/image\.yml$)
+  # ─── ck-ci's OpenTofu bar, copied from tf-quality/pre-commit-config.yaml at v0.1.2 ───
+  # Third-party hooks are pinned by commit, as actions are, since the workflow runs them with its token.
+  - repo: https://github.com/gitleaks/gitleaks
+    rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e # frozen: v8.30.1
+    hooks:
+      # Upstream omits pass_filenames on this variant only, so the staged paths would be appended
+      # and the first one read as gitleaks' target directory.
+      - id: gitleaks-system
         pass_filenames: false
-        require_serial: true
+
+  # Before anything initialises, since the first init runs provider code.
+  - repo: https://github.com/coursekata/ck-ci
+    rev: v0.1.2
+    hooks:
+      - id: tofu-ban
+        fail_fast: true
+      - id: tofu-testing-guard
+        fail_fast: true
+
+  - repo: https://github.com/antonbabenko/pre-commit-terraform
+    rev: 80c8033123f6d6b9ccd1a9458562ea4180742af7 # frozen: v1.109.2
+    hooks:
+      - id: terraform_fmt
+        args:
+          - --hook-config=--tf-path=tofu
+      - id: terraform_validate
+        args:
+          - --hook-config=--tf-path=tofu
+          - --tf-init-args=-backend=false
+      - id: terraform_tflint
+        args:
+          - --hook-config=--tf-path=tofu
+          - --args=--config=__GIT_WORKING_DIR__/.tflint.hcl
+
+  - repo: local
+    hooks:
+      # One scan from the root, so trivy reads .trivyignore itself and a repository without one
+      # still scans. Only OpenTofu misconfigurations, and none in the modules under .terraform, which
+      # their own repositories gate.
+      - id: terraform_trivy
+        name: trivy config
+        language: system
+        files: (\.(tf|tofu)(\.json)?|\.tfvars)$
+        pass_filenames: false
+        entry: trivy config --exit-code 1 --misconfig-scanners terraform --skip-dirs '**/.terraform' .
+
+  - repo: https://github.com/coursekata/ck-ci
+    rev: v0.1.2
+    hooks:
+      - id: tofu-test
+        stages: [pre-push]

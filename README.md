@@ -1,19 +1,10 @@
 # CourseKata Shared IaC Library
 
-**The org's shared, versioned library of reusable infrastructure and delivery building blocks** —
-OpenTofu modules, reusable CI workflows and actions, and the `cloudposse/context` labeling standard.
-Everything here is *composed into* a consuming repo at a pinned version
-(`?ref=vX.Y.Z` / `@vX.Y.Z`), never deployed — the repo holds **no roots, no state, and no
-applies**.
+The org's shared, versioned library of OpenTofu modules and the `cloudposse/context` labeling standard. Everything here is composed into a consuming repo at a pinned tag (`?ref=vX.Y.Z`) and never deployed: the repo holds no roots, no state and no applies.
 
-It is the **dependency root** of the org's IaC: every other repo (`ck-tooling`,
-`ck-foundation`, `ck-datalake`, …) pins *into* it, and it even lints itself with its own quality
-gate. It is **public** so consumers fetch modules and call its workflows and actions with no token,
-and its `v*` tags are frozen immutable. It is a sibling of the `ck-tooling` control plane: reusable
-mechanisms live here, while account-specific delivery orchestration lives in `ck-tooling`.
+It is public, so consumers fetch modules with no token, and its `v*` tags are frozen. Every IaC repo pins modules from it. The CI pieces other repositories' workflows call, including the quality bar this repo runs on itself, live in [ck-ci](https://github.com/coursekata/ck-ci), which pins nothing here, so neither repository's release waits on the other's.
 
-> **Where does a shared thing go?** Versioned modules and reusable CI mechanisms consumed across
-> repositories live here. Account-specific orchestration and the apply gate live in `ck-tooling`.
+> **Where does a shared thing go?** An OpenTofu module goes here. Anything another repository's CI calls goes in ck-ci. Account-specific orchestration and the apply gate live in `ck-tooling`.
 
 ## Modules
 
@@ -86,32 +77,20 @@ At `1.0.0`, MINOR returns to "new backward-compatible feature" and MAJOR signals
 SemVer spec leaves 0.x minor/patch meaning undefined; this convention matches Terraform's own
 `~> 0.y.z` constraint behaviour.)
 
-## Quality gate (`tf-quality.yml`)
+## Quality gate
 
-`pre-commit` (run via `prek`) and CI run fmt, validate, tflint, trivy, `tofu test`, and a
-gitleaks secret scan on every change. Install the hooks once with `prek install`.
-
-CI additionally runs two gates that a pre-commit hook cannot express, because a hook only ever
-sees the staged diff: a **full-history committed-secret scan** (a secret committed and later
-deleted is still disclosed to anyone who can clone) and a **dependency-CVE scan** over any
-lockfile the repo declares. The local gitleaks hook prevents; these gate.
-
-The same checks are packaged as the reusable **[`tf-quality.yml`](.github/workflows/tf-quality.yml)**
-`workflow_call` — credential-free and repo-agnostic. This repo calls it locally; every other IaC
-repo calls it remotely at a pinned tag (`uses: coursekata/ck-tf-modules/.github/workflows/tf-quality.yml@vX.Y.Z`),
-so the org bar is defined once and `prek` keeps remote CI in parity with local pre-commit for the
-hook-expressible checks. Bump a tool version here and all consumers inherit it.
+`ci.yml` runs the org's quality bar, ck-ci's [`tf-quality.yml`](https://github.com/coursekata/ck-ci/blob/main/.github/workflows/tf-quality.yml), at a release tag: fmt, validate, tflint, trivy and `tofu test` in every module, plus a full-history secret scan and a dependency CVE scan. Its `hooks` job runs this repository's own pre-commit hooks, skipping the ones the bar runs. Install the hooks once with `prek install`; they run the bar's checks locally as well.
 
 ## Image delivery
 
-[`docs/image-pipeline.md`](docs/image-pipeline.md) describes the image pipeline: pull requests build and test images and push nothing, and a push to the default branch builds, tests and releases them by digest in one run. The shared workflow is `image.yml`, and `modules/ecr-image-pipeline` provides the ECR side.
+`modules/ecr-image-pipeline` provides the ECR side of the image pipeline, whose shared workflow and contract live in ck-ci ([`image/README.md`](https://github.com/coursekata/ck-ci/blob/main/image/README.md)).
 
 The earlier lane, in which the protected branch rebuilds reviewed source ([`docs/image-delivery.md`](docs/image-delivery.md)), stays until no repository pins it.
 
 ### Local prerequisites
 
 The hooks resolve these from `PATH`, so install them once (CI installs the same set at pinned
-versions). Versions that must match CI are called out in `tf-quality.yml`.
+versions). Versions that must match CI are called out in ck-ci's `tf-quality.yml`.
 
 | Tool | Why |
 |------|-----|
@@ -123,46 +102,6 @@ versions). Versions that must match CI are called out in `tf-quality.yml`.
 
 On macOS: `brew install opentofu tflint trivy gitleaks prek`.
 
-## Dependency updates (`tf-renovate.yml` + `renovate/default.json`)
+## Dependency updates
 
-Renovate runs per repo, from one implementation. A consumer calls the reusable workflow at a pinned
-tag and extends the shared preset:
-
-```yaml
-# .github/workflows/renovate.yml
-on:
-  schedule: [{ cron: "0 13 * * 1" }]
-  workflow_dispatch:
-permissions:
-  contents: write
-  pull-requests: write
-  issues: write
-  statuses: write
-jobs:
-  renovate:
-    uses: coursekata/ck-tf-modules/.github/workflows/tf-renovate.yml@vX.Y.Z
-```
-
-```json
-// renovate.json
-{ "extends": ["github>coursekata/ck-tf-modules//renovate/default.json"] }
-```
-
-Repo-specific rules sit alongside the `extends` — a custom manager for a version string that lives
-outside any manifest, for instance.
-
-**The workflow is pinned, the preset is not, and that split is deliberate.** A workflow executes
-code, so it is pinned by tag and Dependabot moves the pin. The preset is declarative policy that
-executes nothing, so it resolves from `main` and a change reaches the whole fleet at once — which is
-the point of having one.
-
-**It runs on each caller's own `GITHUB_TOKEN`**, not a central App. Pull requests authored that way
-arrive with their CI held for a human to release; an App would fire those runs immediately, and no
-App-side setting restores the gate. `statuses: write` is not optional — `minimumReleaseAge` is
-enforced as a branch status, and without it Renovate creates the branch, fails silently, and reports
-"Repository has changed during renovation" without ever opening the pull request.
-
-Two things a repo-scoped token cannot do, which is why they are configured the way they are: it
-cannot write under `.github/workflows`, so the `github-actions` manager stays off and Dependabot
-keeps that ecosystem; and it cannot read Dependabot alerts, so vulnerability alerts surface through
-Dependabot and CI's dependency gate rather than through Renovate.
+Renovate runs here as the hosted App and extends ck-ci's preset; Dependabot keeps the action SHAs in `ci.yml` current. ck-ci's README describes the preset and the self-hosted workflow the spokes run.

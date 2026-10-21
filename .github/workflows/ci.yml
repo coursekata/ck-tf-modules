@@ -23,9 +23,9 @@ jobs:
     with:
       tofu_version: "1.12.2"
 
-  # This repository's own pre-commit hooks. The quality bar runs fmt, validate, tflint, trivy, tofu
-  # test and the secret scan itself, so their hooks are skipped here. Nothing installs OpenTofu, so
-  # a hook added later that needs it fails rather than repeat the bar.
+  # This repository's own pre-commit hooks. The quality bar runs the ban, the testing guard, fmt,
+  # validate, tflint, trivy, tofu test and the secret scan itself, so their hooks are skipped here.
+  # Nothing installs OpenTofu, so a hook added later that needs it fails rather than repeat the bar.
   hooks:
     runs-on: ubuntu-latest
     steps:
@@ -35,54 +35,19 @@ jobs:
 
       - uses: j178/prek-action@1382ad72dea72f9d53832f2bcb65b3e87a947204 # v3.0.1
         env:
-          SKIP: terraform_fmt,terraform_validate,terraform_tflint,terraform_trivy,tofu-test,gitleaks-system
+          SKIP: tofu-ban,tofu-testing-guard,terraform_fmt,terraform_validate,terraform_tflint,terraform_trivy,tofu-test,gitleaks-system
         with:
           extra-args: --all-files
 
-  image-pipeline:
-    # The image pipeline's scripts end to end against a real BuildKit and registry,
-    # with buildx and the builder set up the way the image workflow sets them up.
-    # Their unit tests run with the other hooks in quality.
-    runs-on: ubuntu-24.04
-    timeout-minutes: 30
-    services:
-      registry:
-        image: registry:3.1.2@sha256:ddf754342cfc8acc51a56d5d0ab6af06826461864460636d8bd5c546dab2a7b8
-        ports:
-          - 5000:5000
-    steps:
-      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
-        with:
-          persist-credentials: false
-
-      - name: Read the tool pins
-        id: pins
-        run: |
-          . image-pipeline/pins.sh
-          echo "buildkit=$BUILDKIT_IMAGE" >> "$GITHUB_OUTPUT"
-          echo "buildx=$BUILDX_VERSION" >> "$GITHUB_OUTPUT"
-
-      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
-        with:
-          version: ${{ steps.pins.outputs.buildx }}
-          driver: docker-container
-          driver-opts: |
-            image=${{ steps.pins.outputs.buildkit }}
-            network=host
-          cache-binary: false
-
-      - name: Build, test and release a fixture through the pipeline scripts
-        run: image-pipeline/tests/integration.sh
-
   ci-passed:
     if: always()
-    needs: [quality, hooks, image-pipeline]
+    needs: [quality, hooks]
     runs-on: ubuntu-latest
     steps:
       - name: Assert all required CI jobs succeeded
         run: |
-          if [ "${{ needs.quality.result }}" != "success" ] || [ "${{ needs.hooks.result }}" != "success" ] || [ "${{ needs.image-pipeline.result }}" != "success" ]; then
-            echo "quality: ${{ needs.quality.result }}, hooks: ${{ needs.hooks.result }}, image-pipeline: ${{ needs.image-pipeline.result }}"
+          if [ "${{ needs.quality.result }}" != "success" ] || [ "${{ needs.hooks.result }}" != "success" ]; then
+            echo "quality: ${{ needs.quality.result }}, hooks: ${{ needs.hooks.result }}"
             exit 1
           fi
           echo "All required CI jobs succeeded."
