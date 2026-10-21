@@ -1,6 +1,6 @@
 # ecr-image-pipeline
 
-The ECR side of the image pipeline for one GitHub repository: a candidate, a release and a cache repository for each image it builds, three roles, and a release-read role for each repository that deploys the images.
+The ECR side of the image pipeline for one GitHub repository, for the image workflow in [ck-ci](https://github.com/coursekata/ck-ci/blob/main/image/README.md): a candidate, a release and a cache repository for each image it builds, three roles, and a release-read role for each repository that deploys the images.
 
 - The **candidate role** trusts any job on the default branch outside an environment, which is how a push and a run by hand both reach it. It pushes candidate images and caches and reads the release cache.
 - The **cache-read role** trusts the repository's `pull_request` jobs. It reads the release cache and nothing else.

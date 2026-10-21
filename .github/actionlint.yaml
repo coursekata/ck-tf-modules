@@ -1,9 +1,0 @@
-# actionlint v1.7.12 does not yet know two keys GitHub documents: job.workflow_sha,
-# which a reusable workflow uses to check out its own repository at its own commit,
-# and a job's cache-mode, which shuts the job out of the GitHub Actions cache. Drop
-# each ignore once actionlint knows its key.
-paths:
-  .github/workflows/image.yml:
-    ignore:
-      - 'property "workflow_sha" is not defined in object type'
-      - 'unexpected key "cache-mode" for "job" section'
