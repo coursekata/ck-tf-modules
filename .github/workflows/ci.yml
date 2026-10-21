@@ -25,6 +25,22 @@ jobs:
     with:
       tofu_version: "1.12.2"
 
+  # This repository's own pre-commit hooks. The quality bar runs fmt, validate, tflint, trivy, tofu
+  # test and the secret scan itself, so their hooks are skipped here. Nothing installs OpenTofu, so
+  # a hook added later that needs it fails rather than repeat the bar.
+  hooks:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+
+      - uses: j178/prek-action@1382ad72dea72f9d53832f2bcb65b3e87a947204 # v3.0.1
+        env:
+          SKIP: terraform_fmt,terraform_validate,terraform_tflint,terraform_trivy,tofu-test,gitleaks-system
+        with:
+          extra-args: --all-files
+
   image-pipeline:
     # The image pipeline's scripts end to end against a real BuildKit and registry,
     # with buildx and the builder set up the way the image workflow sets them up.
@@ -62,13 +78,13 @@ jobs:
 
   ci-passed:
     if: always()
-    needs: [quality, image-pipeline]
+    needs: [quality, hooks, image-pipeline]
     runs-on: ubuntu-latest
     steps:
       - name: Assert all required CI jobs succeeded
         run: |
-          if [ "${{ needs.quality.result }}" != "success" ] || [ "${{ needs.image-pipeline.result }}" != "success" ]; then
-            echo "quality: ${{ needs.quality.result }}, image-pipeline: ${{ needs.image-pipeline.result }}"
+          if [ "${{ needs.quality.result }}" != "success" ] || [ "${{ needs.hooks.result }}" != "success" ] || [ "${{ needs.image-pipeline.result }}" != "success" ]; then
+            echo "quality: ${{ needs.quality.result }}, hooks: ${{ needs.hooks.result }}, image-pipeline: ${{ needs.image-pipeline.result }}"
             exit 1
           fi
           echo "All required CI jobs succeeded."
