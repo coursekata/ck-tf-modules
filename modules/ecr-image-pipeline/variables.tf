@@ -41,3 +41,22 @@ variable "default_branch" {
     error_message = "default_branch must be a branch name such as main, without refs/heads/."
   }
 }
+
+variable "release_readers" {
+  description = "Repositories whose Renovate reads the release repositories to move an image pin, each mapped to its own default branch. A repository is written as GitHub writes it in the OIDC subject, in either form github_repository accepts, and the branch is a name such as main. Each gets a release-read role trusted on that branch, which may describe and pull the release repositories and nothing else. The role's name drops the ids of the immutable form and renders the rest in lowercase with hyphens, so a repository keeps its role when it moves to that form. A repository that is its own consumer names itself."
+  type        = map(string)
+  default     = {}
+
+  validation {
+    condition = alltrue([
+      for r in keys(var.release_readers) :
+      can(regex("^[A-Za-z0-9_.-]+/[A-Za-z0-9_.-]+$", r)) || can(regex("^[A-Za-z0-9_.-]+@[0-9]+/[A-Za-z0-9_.-]+@[0-9]+$", r))
+    ])
+    error_message = "each release reader must be owner/repository, or owner@<owner id>/repository@<repository id> for GitHub's immutable subject form."
+  }
+
+  validation {
+    condition     = alltrue([for b in values(var.release_readers) : can(regex("^[A-Za-z0-9._/-]+$", b)) && !startswith(b, "refs/")])
+    error_message = "each release reader's branch must be a branch name such as main, without refs/heads/."
+  }
+}

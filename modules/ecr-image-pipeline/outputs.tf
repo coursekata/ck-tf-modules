@@ -23,3 +23,8 @@ output "release_role_arn" {
   description = "Role the image workflow's release job assumes in the release environment."
   value       = aws_iam_role.this["release"].arn
 }
+
+output "release_read_role_arns" {
+  description = "Per consumer repository in release_readers, the role its Renovate job assumes to read the release repositories."
+  value       = { for key, x in local.readers : x.repository => aws_iam_role.this[key].arn }
+}
