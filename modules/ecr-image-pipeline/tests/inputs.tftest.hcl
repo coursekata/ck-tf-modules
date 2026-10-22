@@ -108,3 +108,11 @@ run "rejects_a_reader_branch_given_as_a_ref" {
 
   expect_failures = [var.release_readers]
 }
+
+run "rejects_a_sibling_that_is_not_an_ecr_repository_arn" {
+  command = plan
+  variables {
+    sibling_release_repository_arns = ["903709589067.dkr.ecr.us-west-2.amazonaws.com/ck-datalake-prd-contract-release"]
+  }
+  expect_failures = [var.sibling_release_repository_arns]
+}

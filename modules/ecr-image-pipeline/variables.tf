@@ -60,3 +60,20 @@ variable "release_readers" {
     error_message = "each release reader's branch must be a branch name such as main, without refs/heads/."
   }
 }
+
+variable "image_qualifier_in_names" {
+  description = "Whether each repository's name carries image- before its area, as ck-datalake-prd-dbt-runner-image-release does. The lake keeps that form, since an ECR repository cannot be renamed. A new producer sets false: its image's name and the area say enough, as in ck-app-stg-web-server-release."
+  type        = bool
+  default     = true
+}
+
+variable "sibling_release_repository_arns" {
+  description = "Release repositories of another producer in this account whose images this producer's builds consume as a build context, as ck-app-web's web server consumes the api contract. The candidate and cache-read roles may describe and pull them, so a pull request's build and a default-branch build both can; no role may write them, and the release role and the readers get nothing."
+  type        = set(string)
+  default     = []
+
+  validation {
+    condition     = alltrue([for a in var.sibling_release_repository_arns : can(regex("^arn:[^:]+:ecr:[a-z0-9-]+:[0-9]{12}:repository/[a-z0-9._/-]+$", a))])
+    error_message = "each sibling release repository must be an ECR repository ARN."
+  }
+}
