@@ -106,3 +106,29 @@ run "two_images_get_six_repositories" {
     error_message = "each image gets its own three repositories"
   }
 }
+
+run "the_default_names_keep_the_image_qualifier" {
+  command = apply
+
+  assert {
+    condition     = aws_ecr_repository.this["dbt-runner/release"].name == "ck-datalake-prd-dbt-runner-image-release"
+    error_message = "the lake's repositories keep their names: an ECR repository cannot be renamed"
+  }
+}
+
+run "without_the_qualifier_the_area_alone_follows_the_name" {
+  command = apply
+
+  variables {
+    images                   = ["server", "contract"]
+    image_qualifier_in_names = false
+  }
+
+  assert {
+    condition = toset(concat([for r in aws_ecr_repository.this : r.name], [for r in aws_ecr_repository.cache : r.name])) == toset([
+      "ck-datalake-prd-server-candidate", "ck-datalake-prd-server-release", "ck-datalake-prd-server-cache",
+      "ck-datalake-prd-contract-candidate", "ck-datalake-prd-contract-release", "ck-datalake-prd-contract-cache",
+    ])
+    error_message = "a repository is the context, the image's name and its area"
+  }
+}

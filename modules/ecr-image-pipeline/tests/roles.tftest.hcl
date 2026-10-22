@@ -349,3 +349,44 @@ run "no_readers_means_no_reader_roles" {
     error_message = "the three roles alone, as before"
   }
 }
+
+# A producer whose build consumes another producer's release as a build context: its builds, on a
+# pull request and on the default branch, may pull that release and nothing else of the sibling's.
+run "builds_may_pull_a_sibling_release_and_nothing_else_may" {
+  command = apply
+
+  variables {
+    release_readers                 = { "coursekata/ck-datalake" = "main" }
+    sibling_release_repository_arns = ["arn:aws:ecr:us-west-2:903709589067:repository/ck-datalake-prd-contract-release"]
+  }
+
+  assert {
+    condition = alltrue([for k in ["candidate", "cache-read"] : contains(one([
+      for s in data.aws_iam_policy_document.permissions[k].statement : s.resources if s.sid == "Read"
+    ]), "arn:aws:ecr:us-west-2:903709589067:repository/ck-datalake-prd-contract-release")])
+    error_message = "the candidate and cache-read roles read the sibling's release repository"
+  }
+
+  assert {
+    condition = alltrue([for k in ["release", "release-read/coursekata/ck-datalake"] : !contains(one([
+      for s in data.aws_iam_policy_document.permissions[k].statement : s.resources if s.sid == "Read"
+    ]), "arn:aws:ecr:us-west-2:903709589067:repository/ck-datalake-prd-contract-release")])
+    error_message = "the release role and a reader get nothing from the sibling"
+  }
+
+  assert {
+    condition = alltrue([for k in keys(aws_iam_role.this) : alltrue([
+      for s in data.aws_iam_policy_document.permissions[k].statement :
+      s.sid != "Write" || !contains(s.resources, "arn:aws:ecr:us-west-2:903709589067:repository/ck-datalake-prd-contract-release")
+    ])])
+    error_message = "no role may write the sibling's repository"
+  }
+
+  assert {
+    condition = alltrue([for k in keys(aws_iam_role.this) : anytrue([
+      for s in data.aws_iam_policy_document.permissions[k].statement :
+      s.effect == "Deny" && length(s.resources) == 3
+    ])])
+    error_message = "the deny still names this producer's own three repositories and nothing else"
+  }
+}

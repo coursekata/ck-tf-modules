@@ -83,15 +83,15 @@ locals {
   # A default-branch build pushes candidates and reads the release cache. A pull
   # request reads the release cache and nothing else. The release job reads
   # candidates and writes releases and caches. A consumer's reader reads releases
-  # and nothing else.
+  # and nothing else. Both builds also pull any sibling release they consume.
   writes = merge({
     candidate    = local.arns.candidate
     "cache-read" = []
     release      = concat(local.arns.release, local.arns.cache)
   }, { for key, _ in local.readers : key => [] })
   reads = merge({
-    candidate    = local.arns.cache
-    "cache-read" = local.arns.cache
+    candidate    = concat(local.arns.cache, tolist(var.sibling_release_repository_arns))
+    "cache-read" = concat(local.arns.cache, tolist(var.sibling_release_repository_arns))
     release      = local.arns.candidate
   }, { for key, _ in local.readers : key => local.arns.release })
 }
@@ -104,12 +104,12 @@ data "aws_caller_identity" "current" {}
 
 data "context_label" "repository" {
   for_each = local.repositories
-  values   = { name = each.value.image, attributes = "image-${each.value.area}" }
+  values   = { name = each.value.image, attributes = var.image_qualifier_in_names ? "image-${each.value.area}" : each.value.area }
 }
 
 data "context_tags" "repository" {
   for_each = local.repositories
-  values   = { name = each.value.image, attributes = "image-${each.value.area}" }
+  values   = { name = each.value.image, attributes = var.image_qualifier_in_names ? "image-${each.value.area}" : each.value.area }
 }
 
 # trivy:ignore:AVD-AWS-0033 # AES-256 is sufficient for image bytes
