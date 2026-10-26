@@ -14,7 +14,7 @@ It is public, so consumers fetch modules with no token, and its `v*` tags are fr
 | [`context-schema`](modules/context-schema) | Outputs-only module emitting the org labeling schema (property order, slots, tag-case) that each root's `cloudposse/context` provider is configured from. |
 | [`deploy-roles`](modules/deploy-roles) | Spoke plan (RO) + apply (RW) IAM roles for the OIDC hub-spoke delivery model — standardized trust, caller-supplied permissions. |
 | [`ecr-image-publisher`](modules/ecr-image-publisher) | Protected-branch GitHub OIDC role for publishing reviewed images to ECR, with live permission checks. |
-| [`ecr-image-pipeline`](modules/ecr-image-pipeline) | Candidate, release and cache ECR repositories per image, with a default-branch build role, a pull-request cache-read role, a release-environment role and a release-read role per consumer repository, for the image pipeline. |
+| [`ecr-image-pipeline`](modules/ecr-image-pipeline) | Candidate, release and cache ECR repositories per image, with a default-branch build role, a pull-request cache-read role, a release-environment role and a release-read role per consumer, for the image pipeline. |
 | [`ecr-repo`](modules/ecr-repo) | Immutable ECR repository with candidate-age or release-count retention. |
 | [`log-group`](modules/log-group) | CloudWatch Logs log-group primitive — context-rendered name/tags, an optional AWS-mandated source prefix, and a caller-chosen retention. The logging sibling of `s3-bucket`. |
 | [`s3-bucket`](modules/s3-bucket) | Hardened, durable S3 bucket archetype for security/audit buckets, with a generic ARN-free `grants` seam for service-delivery policies. |

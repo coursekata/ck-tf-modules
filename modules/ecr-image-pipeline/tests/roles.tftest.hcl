@@ -164,7 +164,7 @@ run "no_role_can_delete_or_loosen_a_repository" {
   command = apply
 
   variables {
-    release_readers = { "coursekata/ck-datalake" = "main" }
+    release_readers = { datalake = { repository = "coursekata/ck-datalake", branch = "main" } }
   }
 
   assert {
@@ -225,66 +225,66 @@ run "the_immutable_subject_form_is_accepted" {
 }
 
 # A consumer named in release_readers gets a role its default-branch jobs may assume, which reads the
-# release repositories and nothing else. ck-datalake names itself; ck-app-tf is the frontend's reader.
+# release repositories and nothing else. ck-datalake names itself; ck-app-web is the api's reader.
 run "a_release_reader_reads_releases_and_nothing_else" {
   command = apply
 
   variables {
-    release_readers = { "coursekata/ck-datalake" = "main" }
+    release_readers = { datalake = { repository = "coursekata/ck-datalake", branch = "main" } }
   }
 
   assert {
     condition = length([
-      for c in one(data.aws_iam_policy_document.trust["release-read/coursekata/ck-datalake"].statement).condition : c
+      for c in one(data.aws_iam_policy_document.trust["release-read/datalake"].statement).condition : c
       if c.variable == "token.actions.githubusercontent.com:sub" && length(c.values) == 1 && contains(c.values, "repo:coursekata/ck-datalake:ref:refs/heads/main")
     ]) == 1
     error_message = "a reader is trusted on its default branch, and on nothing else"
   }
 
   assert {
-    condition     = length([for s in data.aws_iam_policy_document.permissions["release-read/coursekata/ck-datalake"].statement : s if s.sid == "Write"]) == 0
+    condition     = length([for s in data.aws_iam_policy_document.permissions["release-read/datalake"].statement : s if s.sid == "Write"]) == 0
     error_message = "a reader writes nothing"
   }
 
   assert {
     condition = toset(one([
-      for s in data.aws_iam_policy_document.permissions["release-read/coursekata/ck-datalake"].statement : s.resources if s.sid == "Read"
+      for s in data.aws_iam_policy_document.permissions["release-read/datalake"].statement : s.resources if s.sid == "Read"
     ])) == toset(["arn:aws:ecr:us-west-2:903709589067:repository/ck-datalake-prd-dbt-runner-image-release"])
     error_message = "a reader reads only the release repositories"
   }
 
   assert {
     condition = length(setintersection(toset(one([
-      for s in data.aws_iam_policy_document.permissions["release-read/coursekata/ck-datalake"].statement : s.actions if s.sid == "Read"
+      for s in data.aws_iam_policy_document.permissions["release-read/datalake"].statement : s.actions if s.sid == "Read"
     ])), toset(["ecr:PutImage", "ecr:InitiateLayerUpload", "ecr:UploadLayerPart", "ecr:CompleteLayerUpload"]))) == 0
     error_message = "a reader's read statement carries no push action"
   }
 
   assert {
-    condition     = output.release_read_role_arns["coursekata/ck-datalake"] == aws_iam_role.this["release-read/coursekata/ck-datalake"].arn
-    error_message = "the reader's role is output by its repository"
+    condition     = output.release_read_role_arns["datalake"] == aws_iam_role.this["release-read/datalake"].arn
+    error_message = "the reader's role is output by its label"
   }
 
   assert {
-    condition     = aws_iam_role.this["release-read/coursekata/ck-datalake"].name == "ck-datalake-prd-image-release-read-coursekata-ck-datalake"
-    error_message = "the reader's role is named for its repository, with the slashes rendered as hyphens"
+    condition     = aws_iam_role.this["release-read/datalake"].name == "ck-datalake-prd-image-release-read-datalake"
+    error_message = "the reader's role is named by its label"
   }
 }
 
-# A reader's default branch is its own: the frontend is released from develop, and its consumer,
-# ck-app-tf, runs Renovate on main.
+# A reader's default branch is its own: the api is released from develop, and its consumer,
+# ck-app-web, runs Renovate on main.
 run "a_reader_is_trusted_on_its_own_default_branch" {
   command = apply
 
   variables {
     default_branch  = "develop"
-    release_readers = { "coursekata/ck-app-tf" = "main" }
+    release_readers = { web = { repository = "coursekata/ck-app-web", branch = "main" } }
   }
 
   assert {
     condition = length([
-      for c in one(data.aws_iam_policy_document.trust["release-read/coursekata/ck-app-tf"].statement).condition : c
-      if c.variable == "token.actions.githubusercontent.com:sub" && length(c.values) == 1 && contains(c.values, "repo:coursekata/ck-app-tf:ref:refs/heads/main")
+      for c in one(data.aws_iam_policy_document.trust["release-read/web"].statement).condition : c
+      if c.variable == "token.actions.githubusercontent.com:sub" && length(c.values) == 1 && contains(c.values, "repo:coursekata/ck-app-web:ref:refs/heads/main")
     ]) == 1
     error_message = "the reader is trusted on the branch it names, not the producer's"
   }
@@ -298,47 +298,27 @@ run "a_reader_is_trusted_on_its_own_default_branch" {
   }
 }
 
-# The role name takes only [a-z0-9-] and at most 64 characters. A reader in GitHub's immutable
-# subject form keeps its ids in the trust and drops them from the name, and uppercase and dots render
-# as the label allows, so a repository can move to the immutable form without a new role.
-run "a_reader_in_the_immutable_form_or_with_uppercase_still_names_a_role" {
+# A reader in GitHub's immutable subject form keeps its ids in the trust; the label alone names the
+# role, so a repository moves to that form without a new role.
+run "a_reader_in_the_immutable_form_keeps_its_role" {
   command = apply
 
   variables {
-    release_readers = {
-      "coursekata@12345678/ck-datalake@1098765432" = "main"
-      "UCLATALL/course.kata"                       = "develop"
-    }
+    release_readers = { datalake = { repository = "coursekata@12345678/ck-datalake@1098765432", branch = "main" } }
   }
 
   assert {
-    condition     = aws_iam_role.this["release-read/coursekata@12345678/ck-datalake@1098765432"].name == "ck-datalake-prd-image-release-read-coursekata-ck-datalake"
+    condition     = aws_iam_role.this["release-read/datalake"].name == "ck-datalake-prd-image-release-read-datalake"
     error_message = "the immutable form names the same role as the plain form"
   }
 
   assert {
     condition = length([
-      for c in one(data.aws_iam_policy_document.trust["release-read/coursekata@12345678/ck-datalake@1098765432"].statement).condition : c
+      for c in one(data.aws_iam_policy_document.trust["release-read/datalake"].statement).condition : c
       if contains(c.values, "repo:coursekata@12345678/ck-datalake@1098765432:ref:refs/heads/main")
     ]) == 1
     error_message = "the trust keeps the subject exactly as GitHub writes it"
   }
-
-  assert {
-    condition     = aws_iam_role.this["release-read/UCLATALL/course.kata"].name == "ck-datalake-prd-image-release-read-uclatall-course-kata"
-    error_message = "uppercase and dots render as the label allows"
-  }
-}
-
-# Two readers whose names render alike would fail at apply with one role; the plan must fail first.
-run "rejects_readers_whose_role_names_collide" {
-  command = plan
-
-  variables {
-    release_readers = { "a/b-c" = "main", "a-b/c" = "main" }
-  }
-
-  expect_failures = [aws_iam_role.this]
 }
 
 run "no_readers_means_no_reader_roles" {
@@ -356,7 +336,7 @@ run "builds_may_pull_a_sibling_release_and_nothing_else_may" {
   command = apply
 
   variables {
-    release_readers                 = { "coursekata/ck-datalake" = "main" }
+    release_readers                 = { datalake = { repository = "coursekata/ck-datalake", branch = "main" } }
     sibling_release_repository_arns = ["arn:aws:ecr:us-west-2:903709589067:repository/ck-datalake-prd-contract-release"]
   }
 
@@ -368,7 +348,7 @@ run "builds_may_pull_a_sibling_release_and_nothing_else_may" {
   }
 
   assert {
-    condition = alltrue([for k in ["release", "release-read/coursekata/ck-datalake"] : !contains(one([
+    condition = alltrue([for k in ["release", "release-read/datalake"] : !contains(one([
       for s in data.aws_iam_policy_document.permissions[k].statement : s.resources if s.sid == "Read"
     ]), "arn:aws:ecr:us-west-2:903709589067:repository/ck-datalake-prd-contract-release")])
     error_message = "the release role and a reader get nothing from the sibling"

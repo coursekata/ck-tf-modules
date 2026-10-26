@@ -89,11 +89,21 @@ run "rejects_a_default_branch_with_a_colon" {
   expect_failures = [var.default_branch]
 }
 
+run "rejects_a_reader_label_the_role_name_cannot_take" {
+  command = plan
+
+  variables {
+    release_readers = { "Web_App" = { repository = "coursekata/ck-app-web", branch = "main" } }
+  }
+
+  expect_failures = [var.release_readers]
+}
+
 run "rejects_a_reader_in_neither_subject_form" {
   command = plan
 
   variables {
-    release_readers = { "ck-datalake" = "main" }
+    release_readers = { datalake = { repository = "ck-datalake", branch = "main" } }
   }
 
   expect_failures = [var.release_readers]
@@ -103,7 +113,7 @@ run "rejects_a_reader_branch_given_as_a_ref" {
   command = plan
 
   variables {
-    release_readers = { "coursekata/ck-datalake" = "refs/heads/main" }
+    release_readers = { datalake = { repository = "coursekata/ck-datalake", branch = "refs/heads/main" } }
   }
 
   expect_failures = [var.release_readers]

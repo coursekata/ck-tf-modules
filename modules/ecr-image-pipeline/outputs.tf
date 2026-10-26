@@ -25,6 +25,6 @@ output "release_role_arn" {
 }
 
 output "release_read_role_arns" {
-  description = "Per consumer repository in release_readers, the role its Renovate job assumes to read the release repositories."
-  value       = { for key, x in local.readers : x.repository => aws_iam_role.this[key].arn }
+  description = "Per consumer label in release_readers, the role its Renovate job assumes to read the release repositories."
+  value       = { for label, _ in var.release_readers : label => aws_iam_role.this["release-read/${label}"].arn }
 }
