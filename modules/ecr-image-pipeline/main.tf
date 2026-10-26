@@ -14,9 +14,9 @@ locals {
   # their digest.
   expire_after_days = { candidate = 30, cache = 7 }
 
-  # One release-read role per consumer repository, keyed release-read/<repository>, trusted on the
-  # branch the consumer names, which need not be the producer's.
-  readers = { for r, b in var.release_readers : "release-read/${r}" => { repository = r, branch = b } }
+  # One release-read role per consumer, keyed release-read/<label>, trusted on the branch the
+  # consumer names, which need not be the producer's.
+  readers = { for label, x in var.release_readers : "release-read/${label}" => x }
 
   subjects = merge({
     candidate    = "repo:${var.github_repository}:ref:refs/heads/${var.default_branch}"
@@ -24,13 +24,9 @@ locals {
     release      = "repo:${var.github_repository}:environment:release"
   }, { for key, x in local.readers : key => "repo:${x.repository}:ref:refs/heads/${x.branch}" })
 
-  # The label's attributes slot takes only [a-z0-9-], and IAM allows 64 characters in a role name.
-  # A reader's name drops the immutable form's ids, so the role survives a move to that form, and
-  # renders the rest in lowercase with every other character as a hyphen. The role's preconditions
-  # refuse a name that is too long or that two readers share.
   role_attributes = merge(
     { candidate = "candidate", "cache-read" = "cache-read", release = "release" },
-    { for key, x in local.readers : key => "release-read-${replace(lower(replace(x.repository, "/@[0-9]+/", "")), "/[^a-z0-9]+/", "-")}" },
+    { for label, _ in var.release_readers : "release-read/${label}" => "release-read-${label}" },
   )
 
   pull_actions = [
@@ -235,11 +231,7 @@ resource "aws_iam_role" "this" {
   lifecycle {
     precondition {
       condition     = length(data.context_label.role[each.key].rendered) <= 64
-      error_message = "The role name ${data.context_label.role[each.key].rendered} is longer than the 64 characters IAM allows. Shorten the reader in release_readers, or the context that names the roles."
-    }
-    precondition {
-      condition     = length(distinct([for l in data.context_label.role : l.rendered])) == length(data.context_label.role)
-      error_message = "Two entries in release_readers render the same role name; readers that differ only in case, dots or separators collide."
+      error_message = "The role name ${data.context_label.role[each.key].rendered} is longer than the 64 characters IAM allows. Shorten the reader's label in release_readers, or the context that names the roles."
     }
   }
 }
