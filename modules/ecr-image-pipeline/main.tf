@@ -108,12 +108,21 @@ data "context_tags" "repository" {
   values   = { name = each.value.image, attributes = var.image_qualifier_in_names ? "image-${each.value.area}" : each.value.area }
 }
 
+# A release repository lets one name, latest, move for development pulls; every other tag is frozen.
 # trivy:ignore:AVD-AWS-0033 # AES-256 is sufficient for image bytes
 resource "aws_ecr_repository" "this" {
   for_each = { for key, repo in local.repositories : key => repo if repo.area != "cache" }
 
   name                 = data.context_label.repository[each.key].rendered
-  image_tag_mutability = "IMMUTABLE"
+  image_tag_mutability = each.value.area == "release" ? "IMMUTABLE_WITH_EXCLUSION" : "IMMUTABLE"
+
+  dynamic "image_tag_mutability_exclusion_filter" {
+    for_each = each.value.area == "release" ? [1] : []
+    content {
+      filter      = "latest"
+      filter_type = "WILDCARD"
+    }
+  }
 
   image_scanning_configuration {
     scan_on_push = true
