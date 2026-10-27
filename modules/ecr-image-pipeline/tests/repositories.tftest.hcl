@@ -46,8 +46,16 @@ run "repositories_take_the_confirmed_names" {
   }
 
   assert {
-    condition     = alltrue([for r in aws_ecr_repository.this : r.image_tag_mutability == "IMMUTABLE"])
-    error_message = "candidate and release tags must be immutable, so no tag can be moved onto other bytes"
+    condition     = alltrue([for k, r in aws_ecr_repository.this : r.image_tag_mutability == (endswith(k, "/release") ? "IMMUTABLE_WITH_EXCLUSION" : "IMMUTABLE")])
+    error_message = "candidate tags are immutable; release tags are immutable apart from the one excluded name"
+  }
+
+  assert {
+    condition = alltrue([for k, r in aws_ecr_repository.this : endswith(k, "/release")
+      ? length(r.image_tag_mutability_exclusion_filter) == 1 && one(r.image_tag_mutability_exclusion_filter).filter == "latest" && one(r.image_tag_mutability_exclusion_filter).filter_type == "WILDCARD"
+      : length(r.image_tag_mutability_exclusion_filter) == 0
+    ])
+    error_message = "only a release repository excludes a name, and the one name is latest, which each release moves for development pulls"
   }
 
   assert {
