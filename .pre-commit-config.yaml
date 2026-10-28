@@ -14,7 +14,7 @@ repos:
       - id: check-added-large-files
 
   - repo: https://github.com/renovatebot/pre-commit-hooks
-    rev: 44.57.2
+    rev: 44.172.1
     hooks:
       - id: renovate-config-validator
 
@@ -48,7 +48,7 @@ repos:
         fail_fast: true
 
   - repo: https://github.com/antonbabenko/pre-commit-terraform
-    rev: 80c8033123f6d6b9ccd1a9458562ea4180742af7 # frozen: v1.109.2
+    rev: 443ffdff1cc1663b701ae73e7459029fe883455a # frozen: v1.109.3
     hooks:
       - id: terraform_fmt
         args:
