@@ -5,6 +5,9 @@ updates:
     directory: "/"
     schedule:
       interval: weekly
+    # The org's seven-day soak, which Renovate applies to everything else.
+    cooldown:
+      default-days: 7
     groups:
       actions:
         patterns: ["*"]
