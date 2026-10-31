@@ -40,7 +40,7 @@ repos:
 
   # Before anything initialises, since the first init runs provider code.
   - repo: https://github.com/coursekata/ck-ci
-    rev: v0.1.2
+    rev: v0.2.1
     hooks:
       - id: tofu-ban
         fail_fast: true
@@ -75,7 +75,7 @@ repos:
         entry: trivy config --exit-code 1 --misconfig-scanners terraform --skip-dirs '**/.terraform' .
 
   - repo: https://github.com/coursekata/ck-ci
-    rev: v0.1.2
+    rev: v0.2.1
     hooks:
       - id: tofu-test
         stages: [pre-push]
