@@ -109,6 +109,7 @@ data "context_tags" "repository" {
 }
 
 # A release repository lets one name, latest, move for development pulls; every other tag is frozen.
+# trivy:ignore:AVD-AWS-0031[image_tag_mutability=IMMUTABLE_WITH_EXCLUSION,image_tag_mutability_exclusion_filter.filter=latest]
 # trivy:ignore:AVD-AWS-0033 # AES-256 is sufficient for image bytes
 resource "aws_ecr_repository" "this" {
   for_each = { for key, repo in local.repositories : key => repo if repo.area != "cache" }
