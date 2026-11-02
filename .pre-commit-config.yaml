@@ -14,7 +14,7 @@ repos:
       - id: check-added-large-files
 
   - repo: https://github.com/renovatebot/pre-commit-hooks
-    rev: 44.181.0
+    rev: 44.181.6
     hooks:
       - id: renovate-config-validator
 
@@ -28,7 +28,7 @@ repos:
         pass_filenames: false
         require_serial: true
 
-  # ─── ck-ci's OpenTofu bar, copied from tf-quality/pre-commit-config.yaml at v0.1.2 ───
+  # ─── ck-ci's OpenTofu bar, copied from tf-quality/pre-commit-config.yaml at v0.2.1 ───
   # Third-party hooks are pinned by commit, as actions are, since the workflow runs them with its token.
   - repo: https://github.com/gitleaks/gitleaks
     rev: 83d9cd684c87d95d656c1458ef04895a7f1cbd8e # frozen: v8.30.1
@@ -48,7 +48,7 @@ repos:
         fail_fast: true
 
   - repo: https://github.com/antonbabenko/pre-commit-terraform
-    rev: 443ffdff1cc1663b701ae73e7459029fe883455a # frozen: v1.109.3
+    rev: 4c4437d784e93cacb1f05f1d7bc28e4354fafd20 # frozen: v1.109.4
     hooks:
       - id: terraform_fmt
         args:
