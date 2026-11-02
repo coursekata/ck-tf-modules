@@ -19,7 +19,7 @@ concurrency:
 
 jobs:
   quality:
-    uses: coursekata/ck-ci/.github/workflows/tf-quality.yml@v0.1.2
+    uses: coursekata/ck-ci/.github/workflows/tf-quality.yml@v0.2.1
     with:
       tofu_version: "1.12.2"
 
