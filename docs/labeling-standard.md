@@ -30,7 +30,7 @@ provider "context" {
   # Per-repo — set the slots this repo populates:
   values = {
     namespace = "ck"
-    domain    = "tooling" # tooling | org | datalake | app | canvas | content
+    domain    = "tooling" # tooling | org | datalake | app | canvas | content | cdn
     # environment / surface — set only by multi-env / multi-surface repos (e.g. ck-datalake)
   }
 }
@@ -83,7 +83,7 @@ terraform {
 | Slot | Meaning | Examples |
 |------|---------|----------|
 | `namespace` | org — always `ck`, always present (enforced) | `ck` |
-| `domain` | the product/system a repo owns | `org`, `tooling`, `datalake`, `app`, `canvas`, `content` |
+| `domain` | the product/system a repo owns | `org`, `tooling`, `datalake`, `app`, `canvas`, `content`, `cdn` |
 | `environment` | deploy environment; empty for a singleton | `stg`, `prd`, `dev`, `pr-1234` |
 | `surface` | within-domain subdivision; empty when the domain has one | data tiers `raw`/`staging`/`intermediate`/`marts`/`analytical` (datalake); interface surfaces `api`/`web`/`mobile` (app) |
 | `name` | the resource's primary identity within (domain, env, surface) | `tfstate`, `cloudtrail`, `deploy`, `app` (source system) |
@@ -107,6 +107,7 @@ Names render as `ck-<domain>[-<environment>][-<surface>]-<name>[-<attributes>]`,
 | app backend (future) | `app` | surface=`api` (env per deploy) | `ck-app-api-deploy` |
 | app frontend (future) | `app` | surface=`web` | `ck-app-web-deploy` |
 | canvas (future) | `canvas` | no (surface only if Canvas hosting lands) | `ck-canvas-ses` |
+| ck-services, `cdn` root | `cdn` | environment=`prd` (one root of the repo; state stays in the repo's bucket) | `ck-cdn-prd-shared` |
 
 The **state bucket is one per domain and deliberately env-less/surface-less**:
 `ck-<domain>-tfstate` (e.g. `ck-tooling-tfstate`, `ck-datalake-tfstate`). The `state-backend`
