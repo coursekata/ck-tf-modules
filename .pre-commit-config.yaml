@@ -40,7 +40,7 @@ repos:
 
   # Before anything initialises, since the first init runs provider code.
   - repo: https://github.com/coursekata/ck-ci
-    rev: v0.2.1
+    rev: v0.2.2
     hooks:
       - id: tofu-ban
         fail_fast: true
@@ -48,7 +48,7 @@ repos:
         fail_fast: true
 
   - repo: https://github.com/antonbabenko/pre-commit-terraform
-    rev: 4c4437d784e93cacb1f05f1d7bc28e4354fafd20 # frozen: v1.109.4
+    rev: b9e409b0fee34ee0eee7e6f6a407061f15032926 # frozen: v1.109.5
     hooks:
       - id: terraform_fmt
         args:
@@ -75,7 +75,7 @@ repos:
         entry: trivy config --exit-code 1 --misconfig-scanners terraform --skip-dirs '**/.terraform' .
 
   - repo: https://github.com/coursekata/ck-ci
-    rev: v0.2.1
+    rev: v0.2.2
     hooks:
       - id: tofu-test
         stages: [pre-push]
