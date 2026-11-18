@@ -107,7 +107,7 @@ Names render as `ck-<domain>[-<environment>][-<surface>]-<name>[-<attributes>]`,
 | app backend (future) | `app` | surface=`api` (env per deploy) | `ck-app-api-deploy` |
 | app frontend (future) | `app` | surface=`web` | `ck-app-web-deploy` |
 | canvas (future) | `canvas` | no (surface only if Canvas hosting lands) | `ck-canvas-ses` |
-| ck-services, `cdn` root | `cdn` | environment=`prd` (one root of the repo; state stays in the repo's bucket) | `ck-cdn-prd-shared` |
+| ck-services, `cdn` root | `cdn` | no (one root of the repo; state stays in the repo's bucket) | `ck-cdn-shared` |
 
 The **state bucket is one per domain and deliberately env-less/surface-less**:
 `ck-<domain>-tfstate` (e.g. `ck-tooling-tfstate`, `ck-datalake-tfstate`). The `state-backend`
